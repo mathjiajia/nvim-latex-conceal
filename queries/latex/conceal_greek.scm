@@ -1,3 +1,4 @@
+;; extends
 ; greek conceal
 (generic_command
   command: ((command_name) @conceal

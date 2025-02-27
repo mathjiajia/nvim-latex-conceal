@@ -1,3 +1,4 @@
+;; extends
 (generic_command
   command: (command_name) @conceal
   (#any-of? @conceal "\\emph" "\\mathit" "\\textit" "\\mathbf" "\\textbf")

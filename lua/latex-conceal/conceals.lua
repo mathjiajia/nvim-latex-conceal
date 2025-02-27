@@ -92,9 +92,6 @@ local function load_queries(args)
 end
 
 function M.init(args)
-	if args.enabled == false then
-		return
-	end
 	load_queries(args)
 end
 
