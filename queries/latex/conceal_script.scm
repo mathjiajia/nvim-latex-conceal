@@ -1,4 +1,3 @@
-;; extends
 ; superscripts and subscripts conceals
 (text
   word: (subscript) @conceal
