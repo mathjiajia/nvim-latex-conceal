@@ -1,19 +1,3 @@
-local defaults = {
-	enabled = {
-		"amssymb",
-		"core",
-		"delim",
-		"font",
-		"greek",
-		"math",
-		-- "mleftright",
-		"script",
-	},
-	add = {},
-}
-
-local conf = vim.g.latex_conf or {}
-conf = vim.tbl_deep_extend("force", defaults, conf)
 vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
 	pattern = { "*.md", "*.markdown", "*.tex" },
 	group = vim.api.nvim_create_augroup("latex-conceal", {}),
