@@ -88,7 +88,11 @@ local function load_queries(args)
 	if next(args.add) then
 		strings = strings .. added_query_start .. added_query_middle .. added_query_end
 	end
-	vim.treesitter.query.set("latex", "highlights", ";; extends\n" .. strings)
+
+	local latex_query = [[;; extends
+
+	]] .. strings
+	vim.treesitter.query.set("latex", "highlights", latex_query)
 end
 
 function M.init(args)
