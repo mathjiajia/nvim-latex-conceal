@@ -306,27 +306,257 @@
     "\\v{U}" "Ǔ" "\\v{Z}" "Ž"))
 
 ((generic_command
-  command: (command_name)
-  arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\bar{[aegiouAEGIOU]}")
-  (#set-pairs! @conceal
-    conceal "\\bar{a}" "ā" "\\bar{e}" "ē" "\\bar{g}" "ḡ" "\\bar{i}" "ī" "\\bar{o}" "ō"
-    "\\bar{u}" "ū" "\\bar{A}" "Ā" "\\bar{E}" "Ē" "\\bar{G}" "Ḡ" "\\bar{I}" "Ī" "\\bar{O}" "Ō"
-    "\\bar{U}" "Ū"))
+   command: (command_name)
+   arg: (curly_group)) @conceal
+ (#lua-match? @conceal "\\bar{[a-zA-Z]}")
+ (#set-pairs! @conceal conceal
+  "\\bar{a}" "a̅"
+  "\\bar{b}" "b̅"
+  "\\bar{c}" "c̅"
+  "\\bar{d}" "d̅"
+  "\\bar{e}" "e̅"
+  "\\bar{f}" "f̅"
+  "\\bar{g}" "g̅"
+  "\\bar{h}" "h̅"
+  "\\bar{i}" "i̅"
+  "\\bar{j}" "j̅"
+  "\\bar{k}" "k̅"
+  "\\bar{l}" "l̅"
+  "\\bar{m}" "m̅"
+  "\\bar{n}" "n̅"
+  "\\bar{o}" "o̅"
+  "\\bar{p}" "p̅"
+  "\\bar{q}" "q̅"
+  "\\bar{r}" "r̅"
+  "\\bar{s}" "s̅"
+  "\\bar{t}" "t̅"
+  "\\bar{u}" "u̅"
+  "\\bar{v}" "v̅"
+  "\\bar{w}" "w̅"
+  "\\bar{x}" "x̅"
+  "\\bar{y}" "y̅"
+  "\\bar{z}" "z̅"
+  "\\bar{A}" "A̅"
+  "\\bar{B}" "B̅"
+  "\\bar{C}" "C̅"
+  "\\bar{D}" "D̅"
+  "\\bar{E}" "E̅"
+  "\\bar{F}" "F̅"
+  "\\bar{G}" "G̅"
+  "\\bar{H}" "H̅"
+  "\\bar{I}" "I̅"
+  "\\bar{J}" "J̅"
+  "\\bar{K}" "K̅"
+  "\\bar{L}" "L̅"
+  "\\bar{M}" "M̅"
+  "\\bar{N}" "N̅"
+  "\\bar{O}" "O̅"
+  "\\bar{P}" "P̅"
+  "\\bar{Q}" "Q̅"
+  "\\bar{R}" "R̅"
+  "\\bar{S}" "S̅"
+  "\\bar{T}" "T̅"
+  "\\bar{U}" "U̅"
+  "\\bar{V}" "V̅"
+  "\\bar{W}" "W̅"
+  "\\bar{X}" "X̅"
+  "\\bar{Y}" "Y̅"
+  "\\bar{Z}" "Z̅"))
+
+((generic_command
+   command: (command_name)
+   arg: (curly_group)) @conceal
+ (#lua-match? @conceal "\\bar{\\\\[a-zA-Z]+}")
+ (#set! priority 101)
+ (#set-pairs! @conceal conceal
+  ; Lowercase Greek letters (using combining macron U+0304)
+  "\\bar{\\alpha}" "α̅"
+  "\\bar{\\beta}" "β̅"
+  "\\bar{\\gamma}" "γ̅"
+  "\\bar{\\delta}" "δ̅"
+  "\\bar{\\epsilon}" "ε̅"
+  "\\bar{\\zeta}" "ζ̅"
+  "\\bar{\\eta}" "η̅"
+  "\\bar{\\theta}" "θ̅"
+  "\\bar{\\iota}" "ι̅"
+  "\\bar{\\kappa}" "κ̅"
+  "\\bar{\\lambda}" "λ̅"
+  "\\bar{\\mu}" "μ̅"
+  "\\bar{\\nu}" "ν̅"
+  "\\bar{\\xi}" "ξ̅"
+  "\\bar{\\omicron}" "ο̅"
+  "\\bar{\\pi}" "π̅"
+  "\\bar{\\rho}" "ρ̅"
+  "\\bar{\\sigma}" "σ̅"
+  "\\bar{\\tau}" "τ̅"
+  "\\bar{\\upsilon}" "υ̅"
+  "\\bar{\\phi}" "ϕ̅"
+  "\\bar{\\chi}" "χ̅"
+  "\\bar{\\psi}" "ψ̅"
+  "\\bar{\\omega}" "ω̅"
+  
+  ; Uppercase Greek letters
+  "\\bar{\\Alpha}" "Α̅"
+  "\\bar{\\Beta}" "Β̅"
+  "\\bar{\\Gamma}" "Γ̅"
+  "\\bar{\\Delta}" "Δ̅"
+  "\\bar{\\Epsilon}" "Ε̅"
+  "\\bar{\\Zeta}" "Ζ̅"
+  "\\bar{\\Eta}" "Η̅"
+  "\\bar{\\Theta}" "Θ̅"
+  "\\bar{\\Iota}" "Ι̅"
+  "\\bar{\\Kappa}" "Κ̅"
+  "\\bar{\\Lambda}" "Λ̅"
+  "\\bar{\\Mu}" "Μ̅"
+  "\\bar{\\Nu}" "Ν̅"
+  "\\bar{\\Xi}" "Ξ̅"
+  "\\bar{\\Omicron}" "Ο̅"
+  "\\bar{\\Pi}" "Π̅"
+  "\\bar{\\Rho}" "Ρ̅"
+  "\\bar{\\Sigma}" "Σ̅"
+  "\\bar{\\Tau}" "Τ̅"
+  "\\bar{\\Upsilon}" "Υ̅"
+  "\\bar{\\Phi}" "Φ̅"
+  "\\bar{\\Chi}" "Χ̅"
+  "\\bar{\\Psi}" "Ψ̅"
+  "\\bar{\\Omega}" "Ω̅"
+  
+  ; Variants and alternate forms
+  "\\bar{\\varepsilon}" "ϵ̅"
+  "\\bar{\\vartheta}" "ϑ̅"
+  "\\bar{\\varpi}" "ϖ̅"
+  "\\bar{\\varrho}" "ϱ̅"
+  "\\bar{\\varsigma}" "ς̅"
+  "\\bar{\\varphi}" "φ̅"))
+
+((generic_command
+   command: (command_name)
+   arg: (curly_group)) @conceal
+ (#lua-match? @conceal "\\overline{[a-zA-Z]}")
+ (#set-pairs! @conceal conceal
+  "\\overline{a}" "a̅"
+  "\\overline{b}" "b̅"
+  "\\overline{c}" "c̅"
+  "\\overline{d}" "d̅"
+  "\\overline{e}" "e̅"
+  "\\overline{f}" "f̅"
+  "\\overline{g}" "g̅"
+  "\\overline{h}" "h̅"
+  "\\overline{i}" "i̅"
+  "\\overline{j}" "j̅"
+  "\\overline{k}" "k̅"
+  "\\overline{l}" "l̅"
+  "\\overline{m}" "m̅"
+  "\\overline{n}" "n̅"
+  "\\overline{o}" "o̅"
+  "\\overline{p}" "p̅"
+  "\\overline{q}" "q̅"
+  "\\overline{r}" "r̅"
+  "\\overline{s}" "s̅"
+  "\\overline{t}" "t̅"
+  "\\overline{u}" "u̅"
+  "\\overline{v}" "v̅"
+  "\\overline{w}" "w̅"
+  "\\overline{x}" "x̅"
+  "\\overline{y}" "y̅"
+  "\\overline{z}" "z̅"
+  "\\overline{A}" "A̅"
+  "\\overline{B}" "B̅"
+  "\\overline{C}" "C̅"
+  "\\overline{D}" "D̅"
+  "\\overline{E}" "E̅"
+  "\\overline{F}" "F̅"
+  "\\overline{G}" "G̅"
+  "\\overline{H}" "H̅"
+  "\\overline{I}" "I̅"
+  "\\overline{J}" "J̅"
+  "\\overline{K}" "K̅"
+  "\\overline{L}" "L̅"
+  "\\overline{M}" "M̅"
+  "\\overline{N}" "N̅"
+  "\\overline{O}" "O̅"
+  "\\overline{P}" "P̅"
+  "\\overline{Q}" "Q̅"
+  "\\overline{R}" "R̅"
+  "\\overline{S}" "S̅"
+  "\\overline{T}" "T̅"
+  "\\overline{U}" "U̅"
+  "\\overline{V}" "V̅"
+  "\\overline{W}" "W̅"
+  "\\overline{X}" "X̅"
+  "\\overline{Y}" "Y̅"
+  "\\overline{Z}" "Z̅"))
+
+((generic_command
+   command: (command_name)
+   arg: (curly_group)) @conceal
+ (#lua-match? @conceal "\\overline{\\\\[a-zA-Z]+}")
+ (#set! priority 101)
+ (#set-pairs! @conceal conceal
+  ; Lowercase Greek letters (using combining macron U+0304)
+  "\\overline{\\alpha}" "α̅"
+  "\\overline{\\beta}" "β̅"
+  "\\overline{\\gamma}" "γ̅"
+  "\\overline{\\delta}" "δ̅"
+  "\\overline{\\epsilon}" "ε̅"
+  "\\overline{\\zeta}" "ζ̅"
+  "\\overline{\\eta}" "η̅"
+  "\\overline{\\theta}" "θ̅"
+  "\\overline{\\iota}" "ι̅"
+  "\\overline{\\kappa}" "κ̅"
+  "\\overline{\\lambda}" "λ̅"
+  "\\overline{\\mu}" "μ̅"
+  "\\overline{\\nu}" "ν̅"
+  "\\overline{\\xi}" "ξ̅"
+  "\\overline{\\omicron}" "ο̅"
+  "\\overline{\\pi}" "π̅"
+  "\\overline{\\rho}" "ρ̅"
+  "\\overline{\\sigma}" "σ̅"
+  "\\overline{\\tau}" "τ̅"
+  "\\overline{\\upsilon}" "υ̅"
+  "\\overline{\\phi}" "ϕ̅"
+  "\\overline{\\chi}" "χ̅"
+  "\\overline{\\psi}" "ψ̅"
+  "\\overline{\\omega}" "ω̅"
+  
+  ; Uppercase Greek letters
+  "\\overline{\\Alpha}" "Α̅"
+  "\\overline{\\Beta}" "Β̅"
+  "\\overline{\\Gamma}" "Γ̅"
+  "\\overline{\\Delta}" "Δ̅"
+  "\\overline{\\Epsilon}" "Ε̅"
+  "\\overline{\\Zeta}" "Ζ̅"
+  "\\overline{\\Eta}" "Η̅"
+  "\\overline{\\Theta}" "Θ̅"
+  "\\overline{\\Iota}" "Ι̅"
+  "\\overline{\\Kappa}" "Κ̅"
+  "\\overline{\\Lambda}" "Λ̅"
+  "\\overline{\\Mu}" "Μ̅"
+  "\\overline{\\Nu}" "Ν̅"
+  "\\overline{\\Xi}" "Ξ̅"
+  "\\overline{\\Omicron}" "Ο̅"
+  "\\overline{\\Pi}" "Π̅"
+  "\\overline{\\Rho}" "Ρ̅"
+  "\\overline{\\Sigma}" "Σ̅"
+  "\\overline{\\Tau}" "Τ̅"
+  "\\overline{\\Upsilon}" "Υ̅"
+  "\\overline{\\Phi}" "Φ̅"
+  "\\overline{\\Chi}" "Χ̅"
+  "\\overline{\\Psi}" "Ψ̅"
+  "\\overline{\\Omega}" "Ω̅"
+  
+  ; Variants and alternate forms
+  "\\overline{\\varepsilon}" "ϵ̅"
+  "\\overline{\\vartheta}" "ϑ̅"
+  "\\overline{\\varpi}" "ϖ̅"
+  "\\overline{\\varrho}" "ϱ̅"
+  "\\overline{\\varsigma}" "ς̅"
+  "\\overline{\\varphi}" "φ̅"))
 
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\overline{[aegiouAEGIOU]}")
-  (#set-pairs! @conceal
-    conceal "\\overline{a}" "ā" "\\overline{e}" "ē" "\\overline{g}" "ḡ" "\\overline{i}" "ī"
-    "\\overline{o}" "ō" "\\overline{u}" "ū" "\\overline{A}" "Ā" "\\overline{E}" "Ē"
-    "\\overline{G}" "Ḡ" "\\overline{I}" "Ī" "\\overline{O}" "Ō" "\\overline{U}" "Ū"))
-
-((generic_command
-  command: (command_name)
-  arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\dot{[a-zA-Z]}")
+  (#lua-match? @conceal "\\dot{[%a]}")
   (#set-pairs! @conceal
     conceal "\\dot{A}" "Ȧ" "\\dot{a}" "ȧ" "\\dot{B}" "Ḃ" "\\dot{b}" "ḃ" "\\dot{C}" "Ċ"
     "\\dot{c}" "ċ" "\\dot{D}" "Ḋ" "\\dot{d}" "ḋ" "\\dot{E}" "Ė" "\\dot{e}" "ė" "\\dot{F}"
@@ -405,26 +635,28 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\mathfrak{[a-Z]}")
+  (#lua-match? @conceal "\\mathfrak{[%a]}")
   (#set-pairs! @conceal
-    conceal "\\mathfrak{a}" "𝔞" "\\mathfrak{b}" "𝔟" "\\mathfrak{c}" "𝔠" "\\mathfrak{d}"
-    "𝔡" "\\mathfrak{e}" "𝔢" "\\mathfrak{f}" "𝔣" "\\mathfrak{g}" "𝔤" "\\mathfrak{h}"
-    "𝔥" "\\mathfrak{i}" "𝔦" "\\mathfrak{j}" "𝔧" "\\mathfrak{k}" "𝔨" "\\mathfrak{l}"
-    "𝔩" "\\mathfrak{m}" "𝔪" "\\mathfrak{n}" "𝔫" "\\mathfrak{o}" "𝔬" "\\mathfrak{p}"
-    "𝔭" "\\mathfrak{q}" "𝔮" "\\mathfrak{r}" "𝔯" "\\mathfrak{s}" "𝔰" "\\mathfrak{t}"
-    "𝔱" "\\mathfrak{u}" "𝔲" "\\mathfrak{v}" "𝔳" "\\mathfrak{w}" "𝔴" "\\mathfrak{x}"
-    "𝔵" "\\mathfrak{y}" "𝔶" "\\mathfrak{z}" "𝔷" "\\mathfrak{A}" "𝔄" "\\mathfrak{B}"
-    "𝔅" "\\mathfrak{C}" "ℭ" "\\mathfrak{D}" "𝔇" "\\mathfrak{E}" "𝔈" "\\mathfrak{F}"
-    "𝔉" "\\mathfrak{G}" "𝔊" "\\mathfrak{H}" "ℌ" "\\mathfrak{I}" "ℑ" "\\mathfrak{J}" "𝔍"
-    "\\mathfrak{K}" "𝔎" "\\mathfrak{L}" "𝔏" "\\mathfrak{M}" "𝔐" "\\mathfrak{N}" "𝔑"
-    "\\mathfrak{O}" "𝔒" "\\mathfrak{P}" "𝔓" "\\mathfrak{Q}" "𝔔" "\\mathfrak{R}" "ℜ"
-    "\\mathfrak{S}" "𝔖" "\\mathfrak{T}" "𝔗" "\\mathfrak{U}" "𝔘" "\\mathfrak{V}" "𝔙"
-    "\\mathfrak{W}" "𝔚" "\\mathfrak{X}" "𝔛" "\\mathfrak{Y}" "𝔜" "\\mathfrak{Z}" "ℨ"))
+    conceal "\\mathfrak{a}" "𝔞" "\\mathfrak{b}" "𝔟" "\\mathfrak{c}" "𝔠" "\\mathfrak{d}" "𝔡"
+		"\\mathfrak{e}" "𝔢" "\\mathfrak{f}" "𝔣" "\\mathfrak{g}" "𝔤" "\\mathfrak{h}" "𝔥"
+		"\\mathfrak{i}" "𝔦" "\\mathfrak{j}" "𝔧" "\\mathfrak{k}" "𝔨" "\\mathfrak{l}" "𝔩"
+		"\\mathfrak{m}" "𝔪" "\\mathfrak{n}" "𝔫" "\\mathfrak{o}" "𝔬" "\\mathfrak{p}" "𝔭"
+		"\\mathfrak{q}" "𝔮" "\\mathfrak{r}" "𝔯" "\\mathfrak{s}" "𝔰" "\\mathfrak{t}" "𝔱"
+		"\\mathfrak{u}" "𝔲" "\\mathfrak{v}" "𝔳" "\\mathfrak{w}" "𝔴" "\\mathfrak{x}" "𝔵"
+		"\\mathfrak{y}" "𝔶" "\\mathfrak{z}" "𝔷"
+		"\\mathfrak{A}" "𝔄" "\\mathfrak{B}" "𝔅" "\\mathfrak{C}" "ℭ" "\\mathfrak{D}" "𝔇"
+		"\\mathfrak{E}" "𝔈" "\\mathfrak{F}" "𝔉" "\\mathfrak{G}" "𝔊" "\\mathfrak{H}" "ℌ"
+		"\\mathfrak{I}" "ℑ" "\\mathfrak{J}" "𝔍" "\\mathfrak{K}" "𝔎" "\\mathfrak{L}" "𝔏"
+		"\\mathfrak{M}" "𝔐" "\\mathfrak{N}" "𝔑" "\\mathfrak{O}" "𝔒" "\\mathfrak{P}" "𝔓"
+		"\\mathfrak{Q}" "𝔔" "\\mathfrak{R}" "ℜ" "\\mathfrak{S}" "𝔖" "\\mathfrak{T}" "𝔗"
+		"\\mathfrak{U}" "𝔘" "\\mathfrak{V}" "𝔙" "\\mathfrak{W}" "𝔚" "\\mathfrak{X}" "𝔛"
+		"\\mathfrak{Y}" "𝔜" "\\mathfrak{Z}" "ℨ"
+		))
 
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\mathscr{[a-Z]}")
+  (#lua-match? @conceal "\\mathscr{[%a]}")
   (#set-pairs! @conceal
     conceal "\\mathscr{A}" "𝓐" "\\mathscr{B}" "𝓑" "\\mathscr{C}" "𝓒" "\\mathscr{D}" "𝓓"
     "\\mathscr{E}" "𝓔" "\\mathscr{F}" "𝓕" "\\mathscr{G}" "𝓖" "\\mathscr{H}" "𝓗"
@@ -437,7 +669,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\mathsf{[a-Z]}")
+  (#lua-match? @conceal "\\mathsf{[%a]}")
   (#set-pairs! @conceal
     conceal "\\mathsf{a}" "𝖺" "\\mathsf{b}" "𝖻" "\\mathsf{c}" "𝖼" "\\mathsf{d}" "𝖽"
     "\\mathsf{e}" "𝖾" "\\mathsf{f}" "𝖿" "\\mathsf{g}" "𝗀" "\\mathsf{h}" "𝗁"
@@ -577,3 +809,88 @@
   (#any-of? @conceal "+" "-" "<" ">" "/" "=" "\.")
   (#set-pairs! @conceal conceal "+" "⁺" "-" "⁻" "<" "˂" ">" "˃" "/" "ˊ" "=" "˭" "\." "˙"))
 
+
+(generic_command
+  command: ((command_name) @cmd
+    (#eq? @cmd "\\frac"))
+  (#has-ancestor? @cmd math_environment inline_formula displayed_equation)
+  (#set! priority 101)
+  (#set! conceal "("))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\frac")
+  arg: (curly_group
+    "{" @open1)
+  (#has-ancestor? @open1 math_environment inline_formula displayed_equation)
+  (#set! conceal ""))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\frac")
+  arg: (curly_group
+    "}" @close1)
+  arg: (curly_group)
+  (#has-ancestor? @close1 math_environment inline_formula displayed_equation)
+  (#set! conceal "⧸"))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\frac")
+  arg: (curly_group)
+  arg: (curly_group
+    "{" @open2)
+  (#has-ancestor? @open2 math_environment inline_formula displayed_equation)
+  (#set! conceal " "))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\frac")
+  arg: (curly_group)
+  arg: (curly_group
+    "}" @close2)
+  (#has-ancestor? @close2 math_environment inline_formula displayed_equation)
+  (#set! conceal ")"))
+
+; Conceal \dfrac command and brackets to show as numerator/denominator
+(generic_command
+  command: ((command_name) @cmd
+    (#eq? @cmd "\\dfrac"))
+  (#has-ancestor? @cmd math_environment inline_formula displayed_equation)
+  (#set! priority 101)
+  (#set! conceal "("))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\dfrac")
+  arg: (curly_group
+    "{" @open1)
+  (#has-ancestor? @open1 math_environment inline_formula displayed_equation)
+  (#set! conceal ""))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\dfrac")
+  arg: (curly_group
+    "}" @close1)
+  arg: (curly_group)
+  (#has-ancestor? @close1 math_environment inline_formula displayed_equation)
+  (#set! conceal "⧸"))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\dfrac")
+  arg: (curly_group)
+  arg: (curly_group
+    "{" @open2)
+  (#has-ancestor? @open2 math_environment inline_formula displayed_equation)
+  (#set! conceal " "))
+
+(generic_command
+  command: (command_name) @_cmd
+  (#eq? @_cmd "\\dfrac")
+  arg: (curly_group)
+  arg: (curly_group
+    "}" @close2)
+  (#has-ancestor? @close2 math_environment inline_formula displayed_equation)
+  (#set! conceal ")"))
