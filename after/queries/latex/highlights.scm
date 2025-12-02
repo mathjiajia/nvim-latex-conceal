@@ -309,7 +309,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\bar{[a-zA-Z]}")
+  (#lua-match? @conceal "\\bar{[%a]}")
   (#set-pairs! @conceal
     conceal "\\bar{a}" "a̅" "\\bar{b}" "b̅" "\\bar{c}" "c̅" "\\bar{d}" "d̅" "\\bar{e}" "e̅"
     "\\bar{f}" "f̅" "\\bar{g}" "g̅" "\\bar{h}" "h̅" "\\bar{i}" "i̅" "\\bar{j}" "j̅" "\\bar{k}"
@@ -325,7 +325,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\bar{\\\\[a-zA-Z]+}")
+  (#lua-match? @conceal "\\bar{\\\\[%a]+}")
   (#set! priority 101)
   (#set-pairs! @conceal
     conceal
@@ -350,7 +350,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\overline{[a-zA-Z]}")
+  (#lua-match? @conceal "\\overline{[%a]}")
   (#set-pairs! @conceal
     conceal "\\overline{a}" "a̅" "\\overline{b}" "b̅" "\\overline{c}" "c̅" "\\overline{d}" "d̅"
     "\\overline{e}" "e̅" "\\overline{f}" "f̅" "\\overline{g}" "g̅" "\\overline{h}" "h̅"
@@ -369,7 +369,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\overline{\\\\[a-zA-Z]+}")
+  (#lua-match? @conceal "\\overline{\\\\[%a]+}")
   (#set! priority 101)
   (#set-pairs! @conceal
     conceal
@@ -412,23 +412,37 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\hat{[acegiosuwyACEGIOSUWY]}")
+  (#lua-match? @conceal "\\hat{[%a]}")
   (#set-pairs! @conceal
-    conceal "\\hat{a}" "â" "\\hat{A}" "Â" "\\hat{c}" "ĉ" "\\hat{C}" "Ĉ" "\\hat{e}" "ê"
-    "\\hat{E}" "Ê" "\\hat{g}" "ĝ" "\\hat{G}" "Ĝ" "\\hat{i}" "î" "\\hat{I}" "Î" "\\hat{o}" "ô"
-    "\\hat{O}" "Ô" "\\hat{s}" "ŝ" "\\hat{S}" "Ŝ" "\\hat{u}" "û" "\\hat{U}" "Û" "\\hat{w}" "ŵ"
-    "\\hat{W}" "Ŵ" "\\hat{y}" "ŷ" "\\hat{Y}" "Ŷ"))
+    conceal "\\hat{a}" "â" "\\hat{b}" "b̂" "\\hat{c}" "ĉ" "\\hat{d}" "d̂" "\\hat{e}" "ê"
+    "\\hat{f}" "f̂" "\\hat{g}" "ĝ" "\\hat{h}" "ĥ" "\\hat{i}" "î" "\\hat{j}" "ĵ" "\\hat{k}"
+    "k̂" "\\hat{l}" "l̂" "\\hat{m}" "m̂" "\\hat{n}" "n̂" "\\hat{o}" "ô" "\\hat{p}" "p̂"
+    "\\hat{q}" "q̂" "\\hat{r}" "r̂" "\\hat{s}" "ŝ" "\\hat{t}" "t̂" "\\hat{u}" "û" "\\hat{v}"
+    "v̂" "\\hat{w}" "ŵ" "\\hat{x}" "x̂" "\\hat{y}" "ŷ" "\\hat{z}" "ẑ" "\\hat{A}" "Â"
+    "\\hat{B}" "B̂" "\\hat{C}" "Ĉ" "\\hat{D}" "D̂" "\\hat{E}" "Ê" "\\hat{F}" "F̂" "\\hat{G}"
+    "Ĝ" "\\hat{H}" "Ĥ" "\\hat{I}" "Î" "\\hat{J}" "Ĵ" "\\hat{K}" "K̂" "\\hat{L}" "L̂"
+    "\\hat{M}" "M̂" "\\hat{N}" "N̂" "\\hat{O}" "Ô" "\\hat{P}" "P̂" "\\hat{Q}" "Q̂" "\\hat{R}"
+    "R̂" "\\hat{S}" "Ŝ" "\\hat{T}" "T̂" "\\hat{U}" "Û" "\\hat{V}" "V̂" "\\hat{W}" "Ŵ"
+    "\\hat{X}" "X̂" "\\hat{Y}" "Ŷ" "\\hat{Z}" "Ẑ"))
 
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\widehat{[acegiosuwyACEGIOSUWY]}")
+  (#lua-match? @conceal "\\widehat{[%a]}")
   (#set-pairs! @conceal
-    conceal "\\widehat{a}" "â" "\\widehat{A}" "Â" "\\widehat{c}" "ĉ" "\\widehat{C}" "Ĉ"
-    "\\widehat{e}" "ê" "\\widehat{E}" "Ê" "\\widehat{g}" "ĝ" "\\widehat{G}" "Ĝ" "\\widehat{i}"
-    "î" "\\widehat{I}" "Î" "\\widehat{o}" "ô" "\\widehat{O}" "Ô" "\\widehat{s}" "ŝ"
-    "\\widehat{S}" "Ŝ" "\\widehat{u}" "û" "\\widehat{U}" "Û" "\\widehat{w}" "ŵ" "\\widehat{W}"
-    "Ŵ" "\\widehat{y}" "ŷ" "\\widehat{Y}" "Ŷ"))
+    conceal "\\widehat{a}" "â" "\\widehat{b}" "b̂" "\\widehat{c}" "ĉ" "\\widehat{d}" "d̂"
+    "\\widehat{e}" "ê" "\\widehat{f}" "f̂" "\\widehat{g}" "ĝ" "\\widehat{h}" "ĥ"
+    "\\widehat{i}" "î" "\\widehat{j}" "ĵ" "\\widehat{k}" "k̂" "\\widehat{l}" "l̂"
+    "\\widehat{m}" "m̂" "\\widehat{n}" "n̂" "\\widehat{o}" "ô" "\\widehat{p}" "p̂"
+    "\\widehat{q}" "q̂" "\\widehat{r}" "r̂" "\\widehat{s}" "ŝ" "\\widehat{t}" "t̂"
+    "\\widehat{u}" "û" "\\widehat{v}" "v̂" "\\widehat{w}" "ŵ" "\\widehat{x}" "x̂"
+    "\\widehat{y}" "ŷ" "\\widehat{z}" "ẑ" "\\widehat{A}" "Â" "\\widehat{B}" "B̂"
+    "\\widehat{C}" "Ĉ" "\\widehat{D}" "D̂" "\\widehat{E}" "Ê" "\\widehat{F}" "F̂"
+    "\\widehat{G}" "Ĝ" "\\widehat{H}" "Ĥ" "\\widehat{I}" "Î" "\\widehat{J}" "Ĵ"
+    "\\widehat{K}" "K̂" "\\widehat{L}" "L̂" "\\widehat{M}" "M̂" "\\widehat{N}" "N̂"
+    "\\widehat{O}" "Ô" "\\widehat{P}" "P̂" "\\widehat{Q}" "Q̂" "\\widehat{R}" "R̂"
+    "\\widehat{S}" "Ŝ" "\\widehat{T}" "T̂" "\\widehat{U}" "Û" "\\widehat{V}" "V̂"
+    "\\widehat{W}" "Ŵ" "\\widehat{X}" "X̂" "\\widehat{Y}" "Ŷ" "\\widehat{Z}" "Ẑ"))
 
 ((generic_command
   command: (command_name)
@@ -442,7 +456,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\widetilde{[aeinouyAEINOUY]}")
+  (#lua-match? @conceal "\\widetilde{[%a]}")
   (#set-pairs! @conceal
     conceal "\\widetilde{a}" "ã" "\\widetilde{b}" "b̃" "\\widetilde{c}" "c̃" "\\widetilde{d}"
     "d̃" "\\widetilde{e}" "ẽ" "\\widetilde{f}" "f̃" "\\widetilde{g}" "g̃" "\\widetilde{h}"
