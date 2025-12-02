@@ -19,7 +19,7 @@
       "\\hslash" "\\intercal" "\\leftarrowtail" "\\leftleftarrows" "\\leftrightarrows"
       "\\leftrightharpoons" "\\leftrightsquigarrow" "\\leftthreetimes" "\\leqq" "\\leqslant"
       "\\lessapprox" "\\lessdot" "\\lesseqgtr" "\\lesseqqgtr" "\\lessgtr" "\\lesssim" "\\lnapprox"
-      "\\lneq" "\\lneqq" "\\lnsim" "\\looparrowleft" "\\looparrowright" "\\lozenge" "\\ltimes"
+      "\\lneq" "\\lneqq" "\\lnsim" "\\longrightarrow" "\\looparrowleft" "\\looparrowright" "\\lozenge" "\\ltimes"
       "\\lvertneqq" "\\maltese" "\\measuredangle" "\\multimap" "\\nLeftarrow" "\\nLeftrightarrow"
       "\\nRightarrow" "\\nVDash" "\\nVdash" "\\ncong" "\\nexists" "\\ngeq" "\\ngeqq" "\\ngeqslant"
       "\\ngtr" "\\nleftarrow" "\\nleftrightarrow" "\\nleq" "\\nleqq" "\\nleqslant" "\\nless"
@@ -61,7 +61,7 @@
     "\\leftrightarrows" "⇆" "\\leftrightharpoons" "⇋" "\\leftrightsquigarrow" "↭"
     "\\leftthreetimes" "⋋" "\\leqq" "≦" "\\leqslant" "⩽" "\\lessapprox" "⪅" "\\lessdot"
     "⋖" "\\lesseqgtr" "⋚" "\\lesseqqgtr" "⪋" "\\lessgtr" "≶" "\\lesssim" "≲" "\\lnapprox"
-    "⪉" "\\lneq" "⪇" "\\lneqq" "≨" "\\lnsim" "⋦" "\\looparrowleft" "↫" "\\looparrowright"
+    "⪉" "\\lneq" "⪇" "\\lneqq" "≨" "\\lnsim" "⋦" "\\longleftarrow" "⟵" "\\longrightarrow" "⟶" "\\looparrowleft" "↫" "\\looparrowright"
     "↬" "\\lozenge" "◊" "\\ltimes" "⋉" "\\lvertneqq" "" "\\maltese" "✠" "\\measuredangle"
     "∡" "\\multimap" "⊸" "\\nLeftarrow" "⇍" "\\nLeftrightarrow" "⇎" "\\nRightarrow" "⇏"
     "\\nVDash" "⊯" "\\nVdash" "⊮" "\\ncong" "≆" "\\nexists" "∄" "\\ngeq" "≱" "\\ngeqq"
@@ -447,11 +447,19 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
-  (#lua-match? @conceal "\\tilde{[aeinouyAEINOUY]}")
+  (#lua-match? @conceal "\\tilde{[%a]}")
   (#set-pairs! @conceal
-    conceal "\\tilde{a}" "ã" "\\tilde{e}" "ẽ" "\\tilde{i}" "ĩ" "\\tilde{n}" "ñ" "\\tilde{o}"
-    "õ" "\\tilde{u}" "ũ" "\\tilde{y}" "ỹ" "\\tilde{A}" "Ã" "\\tilde{E}" "Ẽ" "\\tilde{I}" "Ĩ"
-    "\\tilde{N}" "Ñ" "\\tilde{O}" "Õ" "\\tilde{U}" "Ũ" "\\tilde{Y}" "Ỹ"))
+    conceal "\\tilde{a}" "ã" "\\tilde{b}" "b̃" "\\tilde{c}" "c̃" "\\tilde{d}" "d̃" "\\tilde{e}"
+    "ẽ" "\\tilde{f}" "f̃" "\\tilde{g}" "g̃" "\\tilde{h}" "h̃" "\\tilde{i}" "ĩ" "\\tilde{j}"
+    "j̃" "\\tilde{k}" "k̃" "\\tilde{l}" "l̃" "\\tilde{m}" "m̃" "\\tilde{n}" "ñ" "\\tilde{o}"
+    "õ" "\\tilde{p}" "p̃" "\\tilde{q}" "q̃" "\\tilde{r}" "r̃" "\\tilde{s}" "s̃" "\\tilde{t}"
+    "t̃" "\\tilde{u}" "ũ" "\\tilde{v}" "ṽ" "\\tilde{w}" "w̃" "\\tilde{x}" "x̃" "\\tilde{y}"
+    "ỹ" "\\tilde{z}" "z̃" "\\tilde{A}" "Ã" "\\tilde{B}" "B̃" "\\tilde{C}" "C̃" "\\tilde{D}"
+    "D̃" "\\tilde{E}" "Ẽ" "\\tilde{F}" "F̃" "\\tilde{G}" "G̃" "\\tilde{H}" "H̃" "\\tilde{I}"
+    "Ĩ" "\\tilde{J}" "J̃" "\\tilde{K}" "K̃" "\\tilde{L}" "L̃" "\\tilde{M}" "M̃" "\\tilde{N}"
+    "Ñ" "\\tilde{O}" "Õ" "\\tilde{P}" "P̃" "\\tilde{Q}" "Q̃" "\\tilde{R}" "R̃" "\\tilde{S}"
+    "S̃" "\\tilde{T}" "T̃" "\\tilde{U}" "Ũ" "\\tilde{V}" "Ṽ" "\\tilde{W}" "W̃" "\\tilde{X}"
+    "X̃" "\\tilde{Y}" "Ỹ" "\\tilde{Z}" "Z̃"))
 
 ((generic_command
   command: (command_name)
