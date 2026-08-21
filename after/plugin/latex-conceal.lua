@@ -14,7 +14,7 @@ local function hasgrandparent(match, _, _, pred)
 end
 
 ---@param match TSMatch
----@param pred string[]
+---@param pred  string[]
 local function setpairs(match, _, source, pred, metadata)
 	-- (#set-pairs! @aa key list)
 	local id = pred[2]
