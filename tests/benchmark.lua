@@ -195,7 +195,7 @@ local function run()
 				vim.cmd("normal! zt")
 			end, action = function (i)
 				api.nvim_win_set_cursor(0, { 12, i % 2 == 0 and 15 or 25 })
-				api.nvim_exec_autocmds("CursorMoved", { buffer = 0, modeline = false })
+				api.nvim_exec_autocmds("CursorMoved", { buf = 0, modeline = false })
 				draw(false)
 			end },
 			{ name = "scroll_line", prepare = function () vim.cmd("normal! gg") end,
@@ -209,7 +209,7 @@ local function run()
 					-- Bounce so small fixtures or long runs never time no-op scrolls.
 					vim.cmd("normal! " .. string.char(scroll_direction == 1 and 5 or 25))
 					assert(vim.fn.line("w0") ~= previous_top, "scroll sample did not move the viewport")
-					api.nvim_exec_autocmds("CursorMoved", { buffer = 0, modeline = false })
+					api.nvim_exec_autocmds("CursorMoved", { buf = 0, modeline = false })
 					draw(false)
 				end },
 			{ name = "jump", prepare = function () vim.cmd("normal! gg") end,
@@ -220,7 +220,7 @@ local function run()
 					local target = i % 2 == 1 and last_top - offset or 1 + offset
 					api.nvim_win_set_cursor(0, { target, 0 })
 					vim.cmd("normal! zt")
-					api.nvim_exec_autocmds("CursorMoved", { buffer = 0, modeline = false })
+					api.nvim_exec_autocmds("CursorMoved", { buf = 0, modeline = false })
 					draw(false)
 				end },
 			{ name = "edit", prepare = function ()
@@ -228,7 +228,7 @@ local function run()
 				vim.cmd("normal! zt")
 			end, action = function (i)
 				api.nvim_buf_set_text(0, 11, 0, 11, 1, { i % 2 == 0 and "C" or "c" })
-				api.nvim_exec_autocmds("TextChanged", { buffer = 0, modeline = false })
+				api.nvim_exec_autocmds("TextChanged", { buf = 0, modeline = false })
 				draw(false)
 			end },
 			{ name = "edit_math", prepare = function ()
@@ -236,7 +236,7 @@ local function run()
 				vim.cmd("normal! zt")
 			end, action = function (i)
 				api.nvim_buf_set_text(0, 12, math_column, 12, math_column + 1, { i % 2 == 0 and "x" or "y" })
-				api.nvim_exec_autocmds("TextChanged", { buffer = 0, modeline = false })
+				api.nvim_exec_autocmds("TextChanged", { buf = 0, modeline = false })
 				draw(false)
 			end },
 		}

@@ -37,18 +37,15 @@ local styles = {
 	}),
 	boldscript = alphabet(0x1D4D0, 0x1D4EA),
 	fraktur = alphabet(0x1D504, 0x1D51E, nil, { C = "ℭ", H = "ℌ", I = "ℑ", R = "ℜ", Z = "ℨ" }),
-	double = alphabet(
-		0x1D538, 0x1D552, 0x1D7D8,
-		{
-			C = "ℂ",
-			H = "ℍ",
-			N = "ℕ",
-			P = "ℙ",
-			Q = "ℚ",
-			R = "ℝ",
-			Z = "ℤ"
-		}
-	),
+	double = alphabet(0x1D538, 0x1D552, 0x1D7D8, {
+		C = "ℂ",
+		H = "ℍ",
+		N = "ℕ",
+		P = "ℙ",
+		Q = "ℚ",
+		R = "ℝ",
+		Z = "ℤ"
+	}),
 	-- Unicode supplies only these five double-struck italic letters.
 	doubleitalic = { D = "ⅅ", d = "ⅆ", e = "ⅇ", i = "ⅈ", j = "ⅉ" },
 	boldfraktur = alphabet(0x1D56C, 0x1D586),

@@ -348,21 +348,38 @@ test("custom queries preserve highlights, offsets and metadata precedence", func
 	eq(first, draw(original_win, buf), "cached results preserve custom highlight and conceal metadata")
 end)
 
-test("default priority can be configured after the plugin loads", function ()
-	vim.hl.priorities.treesitter = original_priority + 50
-	vim.treesitter.query.set("latex", "conceals", [[
-		((command_name) @conceal (#eq? @conceal "\\alpha") (#set! conceal "A"))
-		((command_name) @conceal (#eq? @conceal "\\beta") (#set! conceal "B") (#set! priority 157))
+test("default priority changes refresh generated and cached priorities", function ()
+	vim.hl.priorities.treesitter = original_priority + 75
+	vim.treesitter.query.set("latex", "conceals", conceal_query .. [[
+		((command_name) @conceal (#eq? @conceal "\\beta") (#set! conceal "B") (#set! priority 101))
 	]])
-	local buf = buffer([[$\alpha + \beta$]])
-	local priorities = {}
-	for _, mark in ipairs(draw(original_win, buf)) do
-		if mark.opts.conceal then
-			priorities[mark.opts.conceal] = mark.opts.priority
+	local buf = buffer([[$\alpha + \beta + \mathbf{A} + \hat{\alpha}$]])
+	local tick = api.nvim_buf_get_changedtick(buf)
+	local function check_priorities()
+		local drawn, priorities = draw(original_win, buf), {}
+		for _, mark in ipairs(drawn) do
+			if mark.opts.conceal then
+				priorities[mark.opts.conceal] = mark.opts.priority
+			end
 		end
+		eq(vim.hl.priorities.treesitter, priorities["α"], "ordinary captures use the configured native priority")
+		eq(vim.hl.priorities.treesitter + 1, priorities["𝐀"], "whole fonts outrank ordinary captures")
+		eq(vim.hl.priorities.treesitter + 1, priorities["α̂"], "whole accents outrank their argument captures")
+		eq(101, priorities.B, "explicit query priorities remain authoritative, including the old generated value")
+		return drawn
 	end
-	eq(vim.hl.priorities.treesitter, priorities.A, "new results use the configured native priority")
-	eq(157, priorities.B, "explicit query priorities remain authoritative")
+	local first = check_priorities()
+	local count = #query_calls
+	eq(first, draw(original_win, buf), "unchanged priorities reuse identical decorations")
+	eq(count, #query_calls, "unchanged priorities do not evaluate the query again")
+
+	vim.hl.priorities.treesitter = original_priority + 125
+	check_priorities()
+	eq(tick, api.nvim_buf_get_changedtick(buf), "the priority change requires no buffer edit")
+	eq(true, #query_calls > count, "changing the default invalidates cached priorities")
+	count = #query_calls
+	check_priorities()
+	eq(count, #query_calls, "updated priorities are cached for later redraws")
 end)
 
 test("viewport caches remain bounded and reuse their scroll margin", function ()

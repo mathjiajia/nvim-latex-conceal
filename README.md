@@ -31,6 +31,7 @@ If your configuration does not already enable Tree-sitter highlighting, add:
 
 ```lua
 vim.api.nvim_create_autocmd("FileType", {
+  group = vim.api.nvim_create_augroup("latex_conceal_highlighting", { clear = true }),
   pattern = { "tex", "plaintex", "markdown" },
   callback = function()
     vim.treesitter.start()

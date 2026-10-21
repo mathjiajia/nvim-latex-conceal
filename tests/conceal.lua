@@ -92,6 +92,8 @@ test("symbol and font mappings", function ()
 		{ [[\nexists]], "∄" },
 		{ [[\gg]], "≫" },
 		{ [[\simeq]], "≃" },
+		{ [[\ncong]], "≇" },
+		{ [[\simneqq]], "≆" },
 		{ [[\emptyset]], "∅" },
 		{ [[\imath]], "ı" },
 		{ [[\longleftarrow]], "⟵" },

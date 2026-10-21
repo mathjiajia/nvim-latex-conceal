@@ -269,7 +269,7 @@ ts.query.add_directive("latex-argument!", function (match, _, source, pred, meta
 				if replacement ~= nil then
 					local entry = capture_metadata(metadata, id)
 					entry.conceal = replacement
-					entry.priority = 101
+					entry.priority = vim.hl.priorities.treesitter + 1
 				end
 			end
 		end

@@ -52,7 +52,7 @@
 ; A command with a braced argument becomes one grapheme when the whole text is
 ; supported: exact accents and legacy fonts keep the default priority, while
 ; bars, overlines and Unicode font alphabets (math context only) take priority
-; 101 so they win over conceals of their contents.
+; one above the Tree-sitter default so they win over conceals of their contents.
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal

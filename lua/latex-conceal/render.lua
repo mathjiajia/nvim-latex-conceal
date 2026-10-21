@@ -270,6 +270,7 @@ local function on_win(_, win, buf, top, bottom)
 	-- root (a buffer reload) can leave results stale without changing the version.
 	local cached = windows[win]
 	if cached and cached.buf == buf and cached.parser == parser and cached.tick == tick and cached.query == query
+		and cached.default_priority == vim.hl.priorities.treesitter
 		and cached.version >= state.reset and cached.first <= top and cached.last >= last
 		and (not cached.sparse or cached.view_first == top and cached.view_last == last) and parser:is_valid(true) then
 		if cached.version ~= state.version then
@@ -316,6 +317,7 @@ local function on_win(_, win, buf, top, bottom)
 		parser = parser,
 		parser_state = state,
 		query = query,
+		default_priority = vim.hl.priorities.treesitter,
 		version = state.version,
 		tick = tick,
 		first = first,
