@@ -420,6 +420,30 @@ test("script mappings do not enter font and accent arguments", function ()
 	end
 end)
 
+test("script captures preserve custom highlight boundaries", function ()
+	local function highlighted(source, text)
+		local result = {}
+		for id, node, metadata in query:iter_captures(parse(source), source, 0, -1) do
+			if query.captures[id] == "conceal" and vim.treesitter.get_node_text(node, source) == text then
+				result[#result + 1] = { conceal = (metadata[id] or {}).conceal or metadata.conceal }
+			end
+		end
+		return result
+	end
+	for _, pair in ipairs({
+		{ "$x^q$", "^q" }, { "$x_{q}$", "q" }, { "$x_{q}$", "_" },
+		{ [[$m_{\mathbb{R}}$]], "R" }, { [[$m_{\mathbb{R}}$]], "_" },
+		{ "$x^{q}$", "^" }, { "$x^{{.}}$", "." }, { "$x_{ab}$", "ab" },
+	}) do
+		eq({}, highlighted(pair[1], pair[2]), "unsupported scripts do not add @conceal highlights: " .. pair[1])
+	end
+	for _, text in ipairs({ "q", "C", "F", "Q", "S" }) do
+		eq({ {} }, highlighted("$x^{" .. text .. "}$", text), "existing highlight-only superscripts are preserved")
+	end
+	eq({ { conceal = "ᵃ" } }, highlighted("$x^{a}$", "a"), "supported scripts still have a highlight and replacement")
+	eq({ { conceal = "" } }, highlighted("$x^{a}$", "^"), "supported braced scripts hide their marker")
+end)
+
 test("script mappings follow the nearest script through grouping braces", function ()
 	replacement([[$m_{{i}}$]], "i", "ᵢ")
 	replacement([[$m^{{i}}$]], "i", "ⁱ")

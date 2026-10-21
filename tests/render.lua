@@ -68,6 +68,7 @@ local tests, assertions, skipped, failures = 0, 0, 0, {}
 local original_win = api.nvim_get_current_win()
 local original_buf = api.nvim_get_current_buf()
 local original_conceallevel = vim.wo[original_win][0].conceallevel
+local original_priority = vim.hl.priorities.treesitter
 local buffers, windows = {}, {}
 
 local function eq(expected, actual, message)
@@ -88,6 +89,7 @@ local function cleanup()
 	api.nvim_set_current_win(original_win)
 	api.nvim_win_set_buf(original_win, original_buf)
 	vim.wo[original_win][0].conceallevel = original_conceallevel
+	vim.hl.priorities.treesitter = original_priority
 	for _, buf in ipairs(buffers) do
 		if api.nvim_buf_is_valid(buf) then
 			api.nvim_buf_delete(buf, { force = true })
@@ -140,6 +142,20 @@ local function conceals(drawn)
 		end
 	end
 	return result
+end
+
+-- Inspect retained history without adding a diagnostic API to the renderer.
+local function parser_cache(parser)
+	for i = 1, 100 do
+		local name, value = debug.getupvalue(provider.on_win, i)
+		if name == "parser_state" then
+			return value(parser)
+		end
+		if not name then
+			break
+		end
+	end
+	error("renderer parser state was not found")
 end
 
 test("completed results are reused on an unchanged redraw", function ()
@@ -332,6 +348,23 @@ test("custom queries preserve highlights, offsets and metadata precedence", func
 	eq(first, draw(original_win, buf), "cached results preserve custom highlight and conceal metadata")
 end)
 
+test("default priority can be configured after the plugin loads", function ()
+	vim.hl.priorities.treesitter = original_priority + 50
+	vim.treesitter.query.set("latex", "conceals", [[
+		((command_name) @conceal (#eq? @conceal "\\alpha") (#set! conceal "A"))
+		((command_name) @conceal (#eq? @conceal "\\beta") (#set! conceal "B") (#set! priority 157))
+	]])
+	local buf = buffer([[$\alpha + \beta$]])
+	local priorities = {}
+	for _, mark in ipairs(draw(original_win, buf)) do
+		if mark.opts.conceal then
+			priorities[mark.opts.conceal] = mark.opts.priority
+		end
+	end
+	eq(vim.hl.priorities.treesitter, priorities.A, "new results use the configured native priority")
+	eq(157, priorities.B, "explicit query priorities remain authoritative")
+end)
+
 test("viewport caches remain bounded and reuse their scroll margin", function ()
 	local lines = {}
 	for i = 1, 400 do
@@ -413,6 +446,49 @@ test("splits retain independent viewport results", function ()
 	eq(count, #query_calls, "drawing another split does not evict this window's cache")
 	api.nvim_win_close(other, true)
 	eq("α", conceals(draw(original_win, buf, 0, 10))["\\alpha"], "closing a split preserves surviving windows")
+end)
+
+test("hidden tabs do not retain unbounded edit history", function ()
+	local buf, parser = buffer([[$\alpha$]])
+	draw(original_win, buf)
+	vim.cmd.tabnew()
+	local other = api.nvim_get_current_win()
+	windows[#windows + 1] = other
+	api.nvim_win_set_buf(other, buf)
+	draw(other, buf)
+	local state = parser_cache(parser)
+	for i = 1, 301 do
+		api.nvim_buf_set_text(buf, 0, 1, 0, 7, { i % 2 == 0 and [[\alpha]] or [[\gamma]] })
+		draw(other, buf)
+	end
+	eq(true, #state.changes <= 256, "an obsolete hidden cache cannot retain every edit")
+	api.nvim_set_current_win(original_win)
+	local replacements = conceals(draw(original_win, buf))
+	eq("γ", replacements["\\gamma"], "returning to the hidden tab renders the current buffer")
+	eq(nil, replacements["\\alpha"], "old tab results are discarded")
+end)
+
+test("same-tick reparses keep bounded history and rebuild older tabs", function ()
+	local buf, parser = buffer([[$\alpha$]])
+	local first = draw(original_win, buf)
+	vim.cmd.tabnew()
+	local other = api.nvim_get_current_win()
+	windows[#windows + 1] = other
+	api.nvim_win_set_buf(other, buf)
+	draw(other, buf)
+	local tick, state = api.nvim_buf_get_changedtick(buf), parser_cache(parser)
+	-- Parser clients may rebuild trees repeatedly before either tab is drawn.
+	for i = 1, 600 do
+		parser:invalidate()
+		parser:parse(true)
+		if i % 100 == 0 then
+			eq(true, #state.changes <= 256, "pending parser history is bounded even without redraws")
+		end
+	end
+	eq(tick, api.nvim_buf_get_changedtick(buf), "reparses do not advance the buffer tick")
+	eq(first, draw(other, buf), "the current tab rebuilds after history has been discarded")
+	api.nvim_set_current_win(original_win)
+	eq(first, draw(original_win, buf), "the older hidden tab also rebuilds its decorations")
 end)
 
 test("window buffer changes and buffer deletion cannot replay stale marks", function ()
@@ -526,6 +602,82 @@ test("scrolling discovers newly exposed Markdown injections", function ()
 	eq(count, #query_calls, "newly discovered injection results are cached")
 	parser:parse({ 0, 3 })
 	eq("α", conceals(draw(original_win, buf, 0, 2))["\\alpha"], "scrolling back restores the earlier formula")
+end)
+
+test("parsing injections elsewhere keeps completed rows", function ()
+	for _, language in ipairs({ "markdown", "markdown_inline" }) do
+		if not pcall(vim.treesitter.language.add, language) then
+			return "missing " .. language .. " parser"
+		end
+	end
+	local lines = {}
+	for row = 1, 100 do
+		lines[row] = row % 2 == 0 and "" or "Ordinary text."
+	end
+	lines[1], lines[3], lines[71] = [[$\alpha$]], [[$\beta$]], [[$\gamma$]]
+	local buf, parser = buffer(lines, "markdown")
+	parser:parse({ 0, 4 })
+	local first = draw(original_win, buf, 0, 3)
+	local replacements = conceals(first)
+	eq("α", replacements["\\alpha"])
+	eq("β", replacements["\\beta"])
+	local count = #query_calls
+	-- Scrolling another split discovers injections elsewhere, and native
+	-- highlighting parses this window again before the provider runs. Neovim may
+	-- rebuild the visible formulas' trees while doing so, but the prose rows stay complete.
+	parser:parse({ 70, 73 })
+	parser:parse({ 0, 4 })
+	eq(first, draw(original_win, buf, 0, 3), "unrelated trees preserve completed decorations")
+	for i = count + 1, #query_calls do
+		local call = query_calls[i]
+		eq(true, call.last - call.first == 1 and (call.first == 0 or call.first == 2),
+			"only rows covered by rebuilt trees are evaluated again: " .. vim.inspect(call))
+	end
+	-- Rebuilt trees invalidate exactly the rows they cover, even without an edit.
+	count = #query_calls
+	parser:children().markdown_inline:children().latex:invalidate()
+	parser:parse({ 0, 4 })
+	eq(first, draw(original_win, buf, 0, 3), "rebuilt trees reproduce the same decorations")
+	eq({ { first = 0, last = 1 }, { first = 2, last = 3 } }, { query_calls[count + 1], query_calls[count + 2] },
+		"rows between rebuilt trees are not evaluated again")
+	eq(count + 2, #query_calls)
+end)
+
+test("conceals follow the native highlighter's tree order", function ()
+	for _, language in ipairs({ "markdown", "markdown_inline" }) do
+		if not pcall(vim.treesitter.language.add, language) then
+			return "missing " .. language .. " parser"
+		end
+	end
+	local buf, parser = buffer({ [[Inline $\alpha$ and $\beta$ then $\gamma$.]], "", [[$$\delta$$]] }, "markdown")
+	parser:parse({ 0, 3 })
+	local drawn = draw(original_win, buf, 0, 2)
+	local replacements = conceals(drawn)
+	eq({ "α", "β", "γ", "δ" },
+		{ replacements["\\alpha"], replacements["\\beta"], replacements["\\gamma"], replacements["\\delta"] },
+		"every formula is concealed")
+	local active = vim.treesitter.highlighter.active[buf]
+	active:prepare_highlight_states(0, 2)
+	local expected = {}
+	for index, state in ipairs(active._highlight_states) do
+		if state.highlighter_query.lang == "latex" then
+			for _, range in ipairs(state.tstree:included_ranges(false)) do
+				expected[#expected + 1] = { index = index, unpack(range) }
+			end
+		end
+	end
+	for _, mark in ipairs(drawn) do
+		local found
+		for _, state in ipairs(expected) do
+			local after_start = mark.row > state[1] or mark.row == state[1] and mark.column >= state[2]
+			local end_row, end_col = mark.opts.end_row, mark.opts.end_col
+			local before_end = end_row < state[3] or end_row == state[3] and end_col <= state[4]
+			if after_start and before_end then
+				found = state.index
+			end
+		end
+		eq(found, mark.opts._subpriority, "a conceal uses the subpriority of its injected tree")
+	end
 end)
 
 if #failures > 0 then

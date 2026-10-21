@@ -155,9 +155,31 @@ local additional_bars = {
 	["\\digamma"] = true, ["\\Digamma"] = true,
 }
 
+-- No supported command is longer than `\command{body}` built from the longest
+-- command and body names, so callers can skip longer arguments unread.
+do
+	local command_length, body_length = 0, 1
+	for _, names in ipairs({ font_styles, greek_fonts, accents }) do
+		for name in pairs(names) do
+			command_length = math.max(command_length, #name)
+		end
+	end
+	for _, map in ipairs({ mixed_greek, bold_greek, greek_letters }) do
+		for body in pairs(map) do
+			body_length = math.max(body_length, #body)
+		end
+	end
+	for _, map in pairs(styles) do
+		for body in pairs(map) do
+			body_length = math.max(body_length, #body)
+		end
+	end
+	M.max_length = 1 + command_length + 1 + body_length + 1
+end
+
 ---@param full_command string
 ---@return string?
-function M.lookup(full_command)
+local function lookup(full_command)
 	local command, body = full_command:match("^\\(%a+){([^{}]+)}$")
 	if not command then
 		return
@@ -184,6 +206,25 @@ function M.lookup(full_command)
 	if accent and body:match("^[A-Za-z0-9]$") then
 		return body .. accent
 	end
+end
+
+-- Documents repeat the same few commands, so results are memoized. Misses are
+-- stored as false; the cache is reset should it ever grow large.
+local cache, cached = {}, 0
+
+---@param full_command string
+---@return string?
+function M.lookup(full_command)
+	local replacement = cache[full_command]
+	if replacement == nil then
+		if cached >= 4096 then
+			cache, cached = {}, 0
+		end
+		replacement = lookup(full_command) or false
+		cache[full_command] = replacement
+		cached = cached + 1
+	end
+	return replacement or nil
 end
 
 return M
