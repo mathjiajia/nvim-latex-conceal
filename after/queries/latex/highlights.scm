@@ -1,154 +1,10 @@
 ; extends
 
-; amssymb conceals
+; Symbol commands share one lookup; the directive selects math or text context.
 (generic_command
-  command: ((command_name) @conceal
-    (#any-of? @conceal
-      "\\Bbbk" "\\Bumpeq" "\\Finv" "\\Game" "\\Lleftarrow" "\\Rrightarrow" "\\Subset" "\\Supset"
-      "\\Vdash" "\\Vvdash" "\\approxeq" "\\backepsilon" "\\backprime" "\\backsim" "\\backsimeq"
-      "\\barwedge" "\\because" "\\beth" "\\between" "\\bigstar" "\\blacklozenge" "\\blacksquare"
-      "\\blacktriangle" "\\blacktriangledown" "\\blacktriangleleft" "\\blacktriangleright"
-      "\\boxdot" "\\boxminus" "\\boxplus" "\\boxtimes" "\\bumpeq" "\\centerdot" "\\checkmark"
-      "\\circeq" "\\circlearrowleft" "\\circlearrowright" "\\circledS" "\\circledast"
-      "\\circledcirc" "\\circleddash" "\\complement" "\\curlyeqprec" "\\curlyeqsucc" "\\curlyvee"
-      "\\curlywedge" "\\curvearrowleft" "\\curvearrowright" "\\daleth" "\\diagdown" "\\diagup"
-      "\\digamma" "\\divideontimes" "\\doteqdot" "\\dotplus" "\\doublebarwedge" "\\downdownarrows"
-      "\\downharpoonleft" "\\downharpoonright" "\\eqcirc" "\\eqsim" "\\eqslantgtr" "\\eqslantless"
-      "\\fallingdotseq" "\\geqq" "\\geqslant" "\\gimel" "\\gnapprox" "\\gneq" "\\gneqq" "\\gnsim"
-      "\\gtrapprox" "\\gtrdot" "\\gtreqless" "\\gtreqqless" "\\gtrless" "\\gtrsim" "\\gvertneqq"
-      "\\hslash" "\\intercal" "\\leftarrowtail" "\\leftleftarrows" "\\leftrightarrows"
-      "\\leftrightharpoons" "\\leftrightsquigarrow" "\\leftthreetimes" "\\leqq" "\\leqslant"
-      "\\lessapprox" "\\lessdot" "\\lesseqgtr" "\\lesseqqgtr" "\\lessgtr" "\\lesssim" "\\lnapprox"
-      "\\lneq" "\\lneqq" "\\lnsim" "\\longleftarrow" "\\longrightarrow" "\\looparrowleft" "\\looparrowright"
-      "\\lozenge" "\\ltimes" "\\lvertneqq" "\\maltese" "\\measuredangle" "\\multimap" "\\nLeftarrow"
-      "\\nLeftrightarrow" "\\nRightarrow" "\\nVDash" "\\nVdash" "\\ncong" "\\nexists" "\\ngeq"
-      "\\ngeqq" "\\ngeqslant" "\\ngtr" "\\nleftarrow" "\\nleftrightarrow" "\\nleq" "\\nleqq"
-      "\\nleqslant" "\\nless" "\\nmid" "\\nparallel" "\\nprec" "\\npreceq" "\\nrightarrow"
-      "\\nshortmid" "\\nshortparallel" "\\nsim" "\\nsubseteq" "\\nsubseteqq" "\\nsucc" "\\nsucceq"
-      "\\nsupseteq" "\\nsupseteqq" "\\ntriangleleft" "\\ntrianglelefteq" "\\ntriangleright"
-      "\\ntrianglerighteq" "\\nvDash" "\\nvdash" "\\pitchfork" "\\precapprox" "\\preccurlyeq"
-      "\\precnapprox" "\\precneqq" "\\precnsim" "\\precsim" "\\rightarrowtail" "\\rightleftarrows"
-      "\\rightrightarrows" "\\rightsquigarrow" "\\rightthreetimes" "\\risingdotseq" "\\rtimes"
-      "\\shortmid" "\\shortparallel" "\\smallfrown" "\\smallsetminus" "\\smallsmile"
-      "\\sphericalangle" "\\square" "\\subseteqq" "\\subsetneq" "\\subsetneqq" "\\succapprox"
-      "\\succcurlyeq" "\\succnapprox" "\\succneqq" "\\succnsim" "\\succsim" "\\supseteqq"
-      "\\supsetneq" "\\supsetneqq" "\\therefore" "\\thickapprox" "\\thicksim" "\\triangledown"
-      "\\trianglelefteq" "\\triangleq" "\\trianglerighteq" "\\twoheadleftarrow"
-      "\\twoheadrightarrow" "\\upharpoonleft" "\\upharpoonright" "\\upuparrows" "\\vDash"
-      "\\varkappa" "\\varnothing" "\\varpropto" "\\varsubsetneq" "\\varsubsetneqq" "\\varsupsetneq"
-      "\\varsupsetneqq" "\\vartriangle" "\\vartriangleleft" "\\vartriangleright" "\\veebar"))
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
-  (#set-pairs! @conceal
-    conceal "\\Bbbk" "𝕜" "\\Bumpeq" "≎" "\\Finv" "Ⅎ" "\\Game" "⅁" "\\Lleftarrow" "⇚"
-    "\\Rrightarrow" "⇛" "\\Subset" "⋐" "\\Supset" "⋑" "\\Vdash" "⊩" "\\Vvdash" "⊪"
-    "\\approxeq" "≊" "\\backepsilon" "∍" "\\backprime" "‵" "\\backsim" "∽" "\\backsimeq"
-    "⋍" "\\barwedge" "⊼" "\\because" "∵" "\\beth" "ℶ" "\\between" "≬" "\\bigstar" "★"
-    "\\blacklozenge" "◆" "\\blacksquare" "■" "\\blacktriangle" "▲" "\\blacktriangledown" "▼"
-    "\\blacktriangleleft" "◀" "\\blacktriangleright" "▶" "\\boxdot" "⊡" "\\boxminus" "⊟"
-    "\\boxplus" "⊞" "\\boxtimes" "⊠" "\\bumpeq" "≏" "\\centerdot" "⋅" "\\checkmark" "✓"
-    "\\circeq" "≗" "\\circlearrowleft" "↺" "\\circlearrowright" "↻" "\\circledS" "Ⓢ"
-    "\\circledast" "⊛" "\\circledcirc" "⊚" "\\circleddash" "⊝" "\\complement" "∁"
-    "\\curlyeqprec" "⋞" "\\curlyeqsucc" "⋟" "\\curlyvee" "⋎" "\\curlywedge" "⋏"
-    "\\curvearrowleft" "↶" "\\curvearrowright" "↷" "\\daleth" "ℸ" "\\diagdown" "╲"
-    "\\diagup" "╱" "\\digamma" "ϝ" "\\divideontimes" "⋇" "\\doteqdot" "≑" "\\dotplus" "∔"
-    "\\doublebarwedge" "⩞" "\\downdownarrows" "⇊" "\\downharpoonleft" "⇃" "\\downharpoonright"
-    "⇂" "\\eqcirc" "≖" "\\eqsim" "≂" "\\eqslantgtr" "⪖" "\\eqslantless" "⪕"
-    "\\fallingdotseq" "≒" "\\geqq" "≧" "\\geqslant" "⩾" "\\gimel" "ℷ" "\\gnapprox" "⪊"
-    "\\gneq" "⪈" "\\gneqq" "≩" "\\gnsim" "⋧" "\\gtrapprox" "⪆" "\\gtrdot" "⋗"
-    "\\gtreqless" "⋛" "\\gtreqqless" "⪌" "\\gtrless" "≷" "\\gtrsim" "≳" "\\gvertneqq" ""
-    "\\hslash" "ℏ" "\\intercal" "⊺" "\\leftarrowtail" "↢" "\\leftleftarrows" "⇇"
-    "\\leftrightarrows" "⇆" "\\leftrightharpoons" "⇋" "\\leftrightsquigarrow" "↭"
-    "\\leftthreetimes" "⋋" "\\leqq" "≦" "\\leqslant" "⩽" "\\lessapprox" "⪅" "\\lessdot"
-    "⋖" "\\lesseqgtr" "⋚" "\\lesseqqgtr" "⪋" "\\lessgtr" "≶" "\\lesssim" "≲" "\\lnapprox"
-    "⪉" "\\lneq" "⪇" "\\lneqq" "≨" "\\lnsim" "⋦" "\\longleftarrow" "⟵" "\\longrightarrow"
-    "⟶" "\\looparrowleft" "↫" "\\looparrowright" "↬" "\\lozenge" "◊" "\\ltimes" "⋉"
-    "\\lvertneqq" "" "\\maltese" "✠" "\\measuredangle" "∡" "\\multimap" "⊸" "\\nLeftarrow"
-    "⇍" "\\nLeftrightarrow" "⇎" "\\nRightarrow" "⇏" "\\nVDash" "⊯" "\\nVdash" "⊮"
-    "\\ncong" "≆" "\\nexists" "∄" "\\ngeq" "≱" "\\ngeqq" "" "\\ngeqslant" "" "\\ngtr"
-    "≯" "\\nleftarrow" "↚" "\\nleftrightarrow" "↮" "\\nleq" "≰" "\\nleqq" ""
-    "\\nleqslant" "" "\\nless" "≮" "\\nmid" "∤" "\\nparallel" "∦" "\\nprec" "⊀"
-    "\\npreceq" "⋠" "\\nrightarrow" "↛" "\\nshortmid" "" "\\nshortparallel" "" "\\nsim"
-    "≁" "\\nsubseteq" "⊈" "\\nsubseteqq" "" "\\nsucc" "⊁" "\\nsucceq" "⋡" "\\nsupseteq"
-    "⊉" "\\nsupseteqq" "" "\\ntriangleleft" "⋪" "\\ntrianglelefteq" "⋬" "\\ntriangleright"
-    "⋫" "\\ntrianglerighteq" "⋭" "\\nvDash" "⊭" "\\nvdash" "⊬" "\\pitchfork" "⋔"
-    "\\precapprox" "⪷" "\\preccurlyeq" "≼" "\\precnapprox" "⪹" "\\precneqq" "⪵" "\\precnsim"
-    "⋨" "\\precsim" "≾" "\\rightarrowtail" "↣" "\\rightleftarrows" "⇄" "\\rightrightarrows"
-    "⇉" "\\rightsquigarrow" "⇝" "\\rightthreetimes" "⋌" "\\risingdotseq" "≓" "\\rtimes"
-    "⋊" "\\shortmid" "∣" "\\shortparallel" "∥" "\\smallfrown" "⌢" "\\smallsetminus" "∖"
-    "\\smallsmile" "⌣" "\\sphericalangle" "∢" "\\square" "□" "\\subseteqq" "⫅" "\\subsetneq"
-    "⊊" "\\subsetneqq" "⫋" "\\succapprox" "⪸" "\\succcurlyeq" "≽" "\\succnapprox" "⪺"
-    "\\succneqq" "⪶" "\\succnsim" "⋩" "\\succsim" "≿" "\\supseteqq" "⫆" "\\supsetneq" "⊋"
-    "\\supsetneqq" "⫌" "\\therefore" "∴" "\\thickapprox" "≈" "\\thicksim" "∼"
-    "\\triangledown" "▽" "\\trianglelefteq" "⊴" "\\triangleq" "≜" "\\trianglerighteq" "⊵"
-    "\\twoheadleftarrow" "↞" "\\twoheadrightarrow" "↠" "\\upharpoonleft" "↿"
-    "\\upharpoonright" "↾" "\\upuparrows" "⇈" "\\vDash" "⊨" "\\varkappa" "ϰ" "\\varnothing"
-    "∅" "\\varpropto" "∝" "\\varsubsetneq" "" "\\varsubsetneqq" "" "\\varsupsetneq" ""
-    "\\varsupsetneqq" "" "\\vartriangle" "△" "\\vartriangleleft" "⊲" "\\vartriangleright"
-    "⊳" "\\veebar" "⊻")
-  )
-
-; math conceals
-(generic_command
-  command: ((command_name) @conceal
-    (#any-of? @conceal
-      "\\aleph" "\\amalg" "\\angle" "\\approx" "\\ast" "\\asymp" "\\backslash" "\\bigcap"
-      "\\bigcirc" "\\bigcup" "\\bigodot" "\\bigoplus" "\\bigotimes" "\\bigsqcup" "\\bigtriangledown"
-      "\\bigtriangleup" "\\bigvee" "\\bigwedge" "\\bot" "\\bowtie" "\\bullet" "\\cap" "\\cdot"
-      "\\cdots" "\\circ" "\\clubsuit" "\\cong" "\\coprod" "\\copyright" "\\cup" "\\dagger" "\\dashv"
-      "\\ddagger" "\\ddots" "\\diamond" "\\diamondsuit" ; "\\div"
-       "\\doteq" "\\dots" "\\downarrow" "\\Downarrow" "\\ell" "\\emptyset" "\\equiv" "\\exists"
-      "\\flat" "\\forall" "\\frown" "\\ge" "\\geq" "\\gets" "\\gg" "\\hbar" "\\heartsuit"
-      "\\hookleftarrow" "\\hookrightarrow" "\\iff" "\\Im" "\\imath" "\\in" "\\infty" "\\int"
-      "\\iint" "\\iiint" "\\jmath" "\\land" "\\lnot" "\\lceil" "\\ldots" "\\le" "\\leftarrow"
-      "\\Leftarrow" "\\leftharpoondown" "\\leftharpoonup" "\\leftrightarrow" "\\Leftrightarrow"
-      "\\lhd" "\\rhd" "\\leq" "\\ll" "\\lmoustache" "\\lor" "\\longmapsto" "\\mapsto" "\\mid"
-      "\\models" "\\mp" "\\nabla" "\\natural" "\\ne" "\\nearrow" "\\neg" "\\neq" "\\ni" "\\notin"
-      "\\nwarrow" "\\odot" "\\oint" "\\ominus" "\\oplus" "\\oslash" "\\otimes" "\\owns" "\\P"
-      "\\parallel" "\\partial" "\\perp" "\\pm" "\\prec" "\\preceq" "\\prime" "\\prod" "\\propto"
-      "\\rceil" "\\Re" "\\rightarrow" "\\Rightarrow"
-      "\\rightleftharpoons" "\\rmoustache" "\\S" "\\searrow" "\\setminus" "\\sharp" "\\sim"
-      "\\simeq" "\\smile" "\\spadesuit" "\\sqcap" "\\sqcup" "\\sqsubset" "\\sqsubseteq" "\\sqsupset"
-      "\\sqsupseteq" "\\star" "\\subset" "\\subseteq" "\\succ" "\\succeq" "\\sum" "\\supset"
-      "\\supseteq" "\\surd" "\\swarrow" "\\times" "\\to" "\\top" "\\triangle" "\\triangleleft"
-      "\\triangleright" "\\uparrow" "\\Uparrow" "\\updownarrow" "\\Updownarrow" "\\vdash" "\\vdots"
-      "\\vee" "\\wedge" "\\wp" "\\wr" "\\implies" "\\choose" "\\sqrt" "\\colon" "\\coloneqq"
-      "\\eqqcolon"))
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
-  (#set-pairs! @conceal
-    conceal "\\aleph" "ℵ" "\\amalg" "∐" "\\angle" "∠" "\\approx" "≈" "\\ast" "∗" "\\asymp"
-    "≍" "\\backslash" "∖" "\\bigcap" "∩" "\\bigcirc" "○" "\\bigcup" "∪" "\\bigodot" "⊙"
-    "\\bigoplus" "⊕" "\\bigotimes" "⊗" "\\bigsqcup" "⊔" "\\bigtriangledown" "∇"
-    "\\bigtriangleup" "∆" "\\bigvee" "⋁" "\\bigwedge" "⋀" "\\bot" "⊥" "\\bowtie" "⋈"
-    "\\bullet" "•" "\\cap" "∩" "\\cdot" "·" "\\cdots" "⋯" "\\circ" "∘" "\\clubsuit" "♣"
-    "\\cong" "≅" "\\coprod" "∐" "\\copyright" "©" "\\cup" "∪" "\\dagger" "†" "\\dashv"
-    "⊣" "\\ddagger" "‡" "\\ddots" "⋱" "\\diamond" "⋄" "\\diamondsuit" "♢" ; 
-     "\\div" "÷" "\\doteq" "≐" "\\dots" "…" "\\downarrow" "↓" "\\Downarrow" "⇓" "\\ell"
-    "ℓ" "\\emptyset" "∅" "\\equiv" "≡" "\\exists" "∃" "\\flat" "♭" "\\forall" "∀"
-    "\\frown" "⁔" "\\ge" "≥" "\\geq" "≥" "\\gets" "←" "\\gg" "≫" "\\hbar" "ℏ"
-    "\\heartsuit" "♡" "\\hookleftarrow" "↩" "\\hookrightarrow" "↪" "\\iff" "⇔" "\\Im" "ℑ"
-    "\\imath" "ı" "\\in" "∈" "\\infty" "∞" "\\int" "∫" "\\iint" "∬" "\\iiint" "∭"
-    "\\jmath" "𝚥" "\\land" "∧" "\\lnot" "¬" "\\lceil" "⌈" "\\ldots" "…" "\\le" "≤"
-    "\\leftarrow" "←" "\\Leftarrow" "⇐" "\\leftharpoondown" "↽" "\\leftharpoonup" "↼"
-    "\\leftrightarrow" "↔" "\\Leftrightarrow" "⇔" "\\lhd" "◁" "\\rhd" "▷" "\\leq" "≤"
-    "\\ll" "≪" "\\lmoustache" "╭" "\\lor" "∨" "\\longmapsto" "⟼" "\\mapsto" "↦" "\\mid"
-    "∣" "\\models" "⊨" "\\mp" "∓" "\\nabla" "∇" "\\natural" "♮" "\\ne" "≠" "\\nearrow"
-    "↗" "\\neg" "¬" "\\neq" "≠" "\\ni" "∋" "\\notin" "∉" "\\nwarrow" "↖" "\\odot" "⊙"
-    "\\oint" "∮" "\\ominus" "⊖" "\\oplus" "⊕" "\\oslash" "⊘" "\\otimes" "⊗" "\\owns" "∋"
-    "\\P" "¶" "\\parallel" "║" "\\partial" "∂" "\\perp" "⊥" "\\pm" "±" "\\prec" "≺"
-    "\\preceq" "⪯" "\\prime" "′" "\\prod" "∏" "\\propto" "∝" "\\rceil" "⌉" "\\Re" "ℜ"
-    "\\rightarrow" "→" "\\Rightarrow" "⇒"
-    "\\rightleftharpoons" "⇌" "\\rmoustache" "╮" "\\S" "§" "\\searrow" "↘" "\\setminus" "⧵"
-    "\\sharp" "♯" "\\sim" "∼" "\\simeq" "≃" "\\smile" "‿" "\\spadesuit" "♠" "\\sqcap"
-    "⊓" "\\sqcup" "⊔" "\\sqsubset" "⊏" "\\sqsubseteq" "⊑" "\\sqsupset" "⊐" "\\sqsupseteq"
-    "⊒" "\\star" "✫" "\\subset" "⊂" "\\subseteq" "⊆" "\\succ" "≻" "\\succeq" "⪰" "\\sum"
-    "∑" "\\supset" "⊃" "\\supseteq" "⊇" "\\surd" "√" "\\swarrow" "↙" "\\times" "×" "\\to"
-    "→" "\\top" "⊤" "\\triangle" "∆" "\\triangleleft" "⊲" "\\triangleright" "⊳"
-    "\\uparrow" "↑" "\\Uparrow" "⇑" "\\updownarrow" "↕" "\\Updownarrow" "⇕" "\\vdash" "⊢"
-    "\\vdots" "⋮" "\\vee" "∨" "\\wedge" "∧" "\\wp" "℘" "\\wr" "≀" "\\implies" "⇒"
-    "\\choose" "C" "\\sqrt" "√" "\\colon" ":" "\\coloneqq" "≔" "\\eqqcolon" "≕")
-  )
+  command: (command_name) @conceal
+  (#not-has-ancestor? @conceal label_definition)
+  (#latex-symbol! @conceal))
 
 (curly_group
   [
@@ -444,35 +300,6 @@
     "\\overline{\\varepsilon}" "ε̅" "\\overline{\\vartheta}" "ϑ̅" "\\overline{\\varpi}" "ϖ̅"
     "\\overline{\\varrho}" "ϱ̅" "\\overline{\\varsigma}" "ς̅" "\\overline{\\varphi}" "φ̅"))
 
-; greek conceal
-(generic_command
-  command: ((command_name) @conceal
-    (#any-of? @conceal
-      "\\alpha" "\\beta" "\\gamma" "\\delta" "\\epsilon" "\\varepsilon" "\\zeta" "\\eta" "\\theta"
-      "\\vartheta" "\\iota" "\\kappa" "\\lambda" "\\mu" "\\nu" "\\xi" "\\pi" "\\varpi" "\\rho"
-      "\\varrho" "\\sigma" "\\varsigma" "\\tau" "\\upsilon" "\\phi" "\\varphi" "\\chi" "\\psi"
-      "\\omega" "\\Gamma" "\\Delta" "\\Theta" "\\Lambda" "\\Xi" "\\Pi" "\\Sigma" "\\Upsilon" "\\Phi"
-      "\\Chi" "\\Psi" "\\Omega"))
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
-  (#set-pairs! @conceal
-    conceal "\\alpha" "α" "\\beta" "β" "\\gamma" "γ" "\\delta" "δ" "\\epsilon" "ϵ"
-    "\\varepsilon" "ε" "\\zeta" "ζ" "\\eta" "η" "\\theta" "θ" "\\vartheta" "ϑ" "\\iota" "ι"
-    "\\kappa" "κ" "\\lambda" "λ" "\\mu" "μ" "\\nu" "ν" "\\xi" "ξ" "\\pi" "π" "\\varpi" "ϖ"
-    "\\rho" "ρ" "\\varrho" "ϱ" "\\sigma" "σ" "\\varsigma" "ς" "\\tau" "τ" "\\upsilon" "υ"
-    "\\phi" "ϕ" "\\varphi" "φ" "\\chi" "χ" "\\psi" "ψ" "\\omega" "ω" "\\Gamma" "Γ" "\\Delta"
-    "Δ" "\\Theta" "Θ" "\\Lambda" "Λ" "\\Xi" "Ξ" "\\Pi" "Π" "\\Sigma" "Σ" "\\Upsilon" "Υ"
-    "\\Phi" "Φ" "\\Chi" "Χ" "\\Psi" "Ψ" "\\Omega" "Ω"))
-
-; math conceals
-(generic_command
-  command: ((command_name) @conceal
-    (#any-of? @conceal "\\\\" "\\{" "\\}" "\\|" "\\langle" "\\rangle"))
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
-  (#set-pairs! @conceal
-    conceal "\\\\" "⏎" "\\{" "{" "\\}" "}" "\\|" "‖" "\\langle" "⟨" "\\rangle" "⟩"))
-
 ; superscripts and subscripts conceals
 (text
   word: (subscript) @conceal
@@ -493,10 +320,10 @@
 
 (text
   word: (word) @conceal
+  (#lua-match? @conceal "^[0-9aeh-pr-vxA-Z]$")
   (#has-ancestor? @conceal subscript)
   (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
   (#not-has-ancestor? @conceal text_mode label_definition)
-  (#lua-match? @conceal "^[0-9aeh-pr-vxA-Z]$")
   (#set-pairs! @conceal
     conceal "0" "₀" "1" "₁" "2" "₂" "3" "₃" "4" "₄" "5" "₅" "6" "₆" "7" "₇" "8"
     "₈" "9" "₉" "a" "ₐ" "e" "ₑ" "h" "ₕ" "i" "ᵢ" "j" "ⱼ" "k" "ₖ" "l" "ₗ" "m" "ₘ"
@@ -539,10 +366,10 @@
 
 (text
   word: (word) @conceal
+  (#lua-match? @conceal "^[0-9a-zA-W]$")
   (#has-ancestor? @conceal superscript)
   (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
   (#not-has-ancestor? @conceal label_definition text_mode)
-  (#lua-match? @conceal "^[0-9a-zA-W]$")
   (#set-pairs! @conceal
     conceal "0" "⁰" "1" "¹" "2" "²" "3" "³" "4" "⁴" "5" "⁵" "6" "⁶" "7" "⁷" "8" "⁸"
     "9" "⁹" "a" "ᵃ" "b" "ᵇ" "c" "ᶜ" "d" "ᵈ" "e" "ᵉ" "f" "ᶠ" "g" "ᵍ" "h" "ʰ" "i"
@@ -630,13 +457,6 @@
   (#set! @conceal.open2 conceal " ")
   (#set! @conceal.close2 conceal ")"))
 
-; Supplementary Unicode symbols. Existing replacements keep their original rules.
-(generic_command
-  command: (command_name) @conceal
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
-  (#latex-conceal! @conceal "math"))
-
 ; Sized delimiters use different parser fields from ordinary symbol commands.
 (math_delimiter
   [
@@ -652,18 +472,6 @@
     "\\uparrow" "↑" "\\downarrow" "↓" "\\updownarrow" "↕"
     "\\Uparrow" "⇑" "\\Downarrow" "⇓" "\\Updownarrow" "⇕")
   (#latex-conceal! @conceal "math"))
-
-; Text symbol commands also work inside math-mode text blocks.
-(generic_command
-  command: (command_name) @conceal
-  (#not-has-ancestor? @conceal math_environment inline_formula displayed_equation label_definition)
-  (#latex-conceal! @conceal "text"))
-
-(generic_command
-  command: (command_name) @conceal
-  (#has-ancestor? @conceal text_mode)
-  (#not-has-ancestor? @conceal label_definition)
-  (#latex-conceal! @conceal "text"))
 
 ; A whole command becomes one grapheme only when its full argument is supported.
 ((generic_command

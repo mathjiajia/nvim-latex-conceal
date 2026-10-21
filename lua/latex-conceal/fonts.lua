@@ -102,6 +102,21 @@ for style, base in pairs(greek_styles) do
 end
 styles.bold["\\Digamma"], styles.bold["\\digamma"] = "𝟊", "𝟋"
 
+local greek_letters, mixed_greek = {}, {}
+for name, letter in pairs(greek) do
+	local command = "\\" .. name
+	greek_letters[command] = letter
+	local upright = name:match("^%u") or name == "nabla" or name == "digamma"
+	mixed_greek[command] = (upright and styles.bold or styles.bolditalic)[command]
+end
+
+for command, style in pairs(font_styles) do
+	font_styles[command] = styles[style]
+end
+for command, style in pairs(greek_fonts) do
+	greek_fonts[command] = style == "mixed" and mixed_greek or styles[style]
+end
+
 local accents = {
 	acute = "́", grave = "̀", breve = "̆", check = "̌", ddot = "̈",
 	dddot = "⃛", ddddot = "⃜", vec = "⃗", dot = "̇",
@@ -116,6 +131,11 @@ local existing_letters = {
 	dot = "^[AaBbCcDdEeFfGgHhIMmNnOoPpRrSsTtWwXxYyZz]$",
 }
 
+local additional_bars = {
+	["\\varkappa"] = true, ["\\partial"] = true, ["\\nabla"] = true,
+	["\\digamma"] = true, ["\\Digamma"] = true,
+}
+
 ---@param full_command string
 ---@return string?
 function M.lookup(full_command)
@@ -127,30 +147,26 @@ function M.lookup(full_command)
 	if existing and body:match(existing) then
 		return
 	end
-	local greek_name = body:match("^\\(%a+)$")
-	local greek_letter = greek_name and greek[greek_name]
-	if not greek_letter and not body:match("^[A-Za-z0-9]$") then
-		return
+	local greek_letter = greek_letters[body]
+	if greek_letter then
+		local accent = accents[command]
+		if accent then
+			if (command == "bar" or command == "overline") and not additional_bars[body] then
+				return
+			end
+			return greek_letter .. accent
+		end
+		local alphabet_map = greek_fonts[command]
+		return alphabet_map and alphabet_map[body]
 	end
-	if (command == "bar" or command == "overline") and greek_letter
-		and greek_name ~= "varkappa" and greek_name ~= "partial" and greek_name ~= "nabla"
-		and greek_name ~= "digamma" and greek_name ~= "Digamma" then
-		return
+	local alphabet_map = font_styles[command]
+	if alphabet_map then
+		return alphabet_map[body]
 	end
 	local accent = accents[command]
-	if accent then
-		return (greek_letter or body) .. accent
+	if accent and body:match("^[A-Za-z0-9]$") then
+		return body .. accent
 	end
-	if greek_letter then
-		local style = greek_fonts[command]
-		if style == "mixed" then
-			local upright = greek_name:match("^%u") or greek_name == "nabla" or greek_name == "digamma"
-			style = upright and "bold" or "bolditalic"
-		end
-		return style and styles[style][body]
-	end
-	local style = font_styles[command]
-	return style and styles[style][body]
 end
 
 return M

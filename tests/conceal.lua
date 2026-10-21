@@ -4,11 +4,7 @@ local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
 vim.opt.runtimepath:prepend(root)
 vim.opt.runtimepath:append(root .. "/after")
 if vim.env.NVIM_TREESITTER then
-	local runtime = vim.env.NVIM_TREESITTER
-	if vim.fn.isdirectory(runtime .. "/runtime") == 1 then
-		runtime = runtime .. "/runtime"
-	end
-	vim.opt.runtimepath:prepend(runtime)
+	vim.opt.runtimepath:prepend(vim.env.NVIM_TREESITTER .. "/runtime")
 end
 vim.cmd.runtime("plugin/latex-conceal.lua")
 
@@ -134,7 +130,13 @@ test("additional mathematical alphabets", function ()
 		{ [[\mathcal{a}]], "𝓪" },
 		{ [[\mathscr{a}]], "𝓪" },
 		{ [[\boldsymbol{\alpha}]], "𝜶" },
-		{ [[\bm{\Gamma}]], "𝚪" }
+		{ [[\bm{\Gamma}]], "𝚪" },
+		{ [[\bm{\nabla}]], "𝛁" },
+		{ [[\bm{\digamma}]], "𝟋" },
+		{ [[\symbf{\alpha}]], "𝜶" },
+		{ [[\symbf{\Gamma}]], "𝚪" },
+		{ [[\symbfup{\alpha}]], "𝛂" },
+		{ [[\symbfit{\Gamma}]], "𝜞" }
 	}) do
 		replacement("$" .. pair[1] .. "$", pair[1], pair[2])
 	end
@@ -143,7 +145,11 @@ test("additional mathematical alphabets", function ()
 		[[\mathbf{AB}]],
 		[[\mathbf{}]],
 		[[\mathbf{A}{B}]],
-		[[\mathbf{\unknown}]]
+		[[\mathbf{\unknown}]],
+		[[\mathbf{\alpha}]],
+		[[\symbb{\alpha}]],
+		[[\symit{1}]],
+		[[\symbfit{\digamma}]]
 	}) do
 		eq({}, values("$" .. command .. "$", command), "unsupported font arguments stay visible: " .. command)
 	end
@@ -163,6 +169,22 @@ test("text symbols respect text and label contexts", function ()
 		eq({}, values("$" .. command .. "$", command), "text commands outside text mode stay visible")
 		eq({}, values("\\label{" .. command .. "}", command), "labels stay visible")
 	end
+end)
+
+test("symbol context respects enclosing text and labels", function ()
+	local source = [[$\unknown{\alpha + \Cap} + \text{\unknown{\textalpha + \textdegree}}$]]
+	for _, pair in ipairs({
+		{ [[\alpha]], "α" }, { [[\Cap]], "⋒" },
+		{ [[\textalpha]], "α" }, { [[\textdegree]], "°" },
+	}) do
+		replacement(source, pair[1], pair[2])
+	end
+	for _, command in ipairs({ [[\alpha]], [[\Cap]] }) do
+		eq({}, values("$\\text{$" .. command .. "$}$", command), "enclosing text excludes math symbols")
+		eq({}, values("$\\label{" .. command .. "}$", command), "labels exclude math symbols")
+	end
+	replacement([[$\text{$\textalpha$}$]], [[\textalpha]], "α")
+	eq({}, values([[$\label{\textalpha}$]], [[\textalpha]]), "labels exclude text symbols")
 end)
 
 test("sized mathematical delimiters receive the same symbols", function ()
@@ -207,6 +229,7 @@ test("accent mappings", function ()
 		{ [[\vec{x}]], "x⃗" },
 		{ [[\ddot{x}]], "ẍ" },
 		{ [[\bar{\alpha}]], "α̅" },
+		{ [[\bar{\partial}]], "∂̅" },
 		{ [[\overline{\epsilon}]], "ϵ̅" },
 		{ [[\bar{\varepsilon}]], "ε̅" }
 	}) do

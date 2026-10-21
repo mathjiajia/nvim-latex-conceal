@@ -1,4 +1,5 @@
 local symbols = require("latex-conceal.symbols")
+local lookup_font
 
 local M = {}
 
@@ -7,7 +8,8 @@ local M = {}
 ---@return string?
 function M.lookup(text, kind)
 	if kind == "font" then
-		return require("latex-conceal.fonts").lookup(text)
+		lookup_font = lookup_font or require("latex-conceal.fonts").lookup
+		return lookup_font(text)
 	end
 	return symbols[kind][text]
 end

@@ -76,7 +76,8 @@ With the parsers and queries on Neovim's runtime path, run:
 nvim --headless -u NONE -i NONE -l tests/conceal.lua
 ```
 
-To test a separate nvim-treesitter checkout, set `NVIM_TREESITTER` to its path.
+To test a separate nvim-treesitter `main` checkout, set `NVIM_TREESITTER` to its path;
+the tests use its `runtime/` directory.
 
 ## Acknowledgement
 

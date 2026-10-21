@@ -3,9 +3,12 @@ if vim.g.loaded_latex_conceal then
 end
 vim.g.loaded_latex_conceal = true
 
+local ts = vim.treesitter
+local get_node_text = ts.get_node_text
+
 for _, filetype in ipairs({ "tex", "plaintex" }) do
-	if vim.treesitter.language.get_lang(filetype) == filetype then
-		vim.treesitter.language.register("latex", filetype)
+	if ts.language.get_lang(filetype) == filetype then
+		ts.language.register("latex", filetype)
 	end
 end
 
@@ -59,7 +62,7 @@ local function set_pairs(match, _, source, pred, metadata)
 	end
 
 	for _, node in ipairs(nodes) do
-		local replacement = replacements[vim.treesitter.get_node_text(node, source)]
+		local replacement = replacements[get_node_text(node, source)]
 		if replacement ~= nil then
 			metadata[id] = metadata[id] or {}
 			metadata[id][key] = replacement
@@ -67,20 +70,60 @@ local function set_pairs(match, _, source, pred, metadata)
 	end
 end
 
-vim.treesitter.query.add_predicate("has-grandparent?", has_grandparent, { force = true })
-vim.treesitter.query.add_directive("set-pairs!", set_pairs, { force = true })
+ts.query.add_predicate("has-grandparent?", has_grandparent, { force = true })
+ts.query.add_directive("set-pairs!", set_pairs, { force = true })
 
--- Load the supplementary symbol tables only when a query needs them.
-vim.treesitter.query.add_directive("latex-conceal!", function (match, _, source, pred, metadata)
+local math_nodes = { math_environment = true, inline_formula = true, displayed_equation = true }
+local symbols
+ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metadata)
 	local id = pred[2]
 	local nodes = match[id]
-	if not nodes then
+	if not nodes or #nodes == 0 then
 		return
 	end
 
-	local lookup = require("latex-conceal").lookup
+	symbols = symbols or require("latex-conceal.symbols")
 	for _, node in ipairs(nodes) do
-		local replacement = lookup(vim.treesitter.get_node_text(node, source), pred[3])
+		local text = get_node_text(node, source)
+		local math_symbol = symbols.math_common[text] or symbols.math[text]
+		local text_symbol = symbols.text[text]
+		if math_symbol ~= nil or text_symbol ~= nil then
+			-- The query excludes labels; enclosing text takes precedence over math.
+			local in_math = false
+			local parent = node:parent()
+			while parent do
+				local node_type = parent:type()
+				if node_type == "text_mode" then
+					in_math = false
+					break
+				end
+				in_math = in_math or math_nodes[node_type] == true
+				parent = parent:parent()
+			end
+			local replacement = text_symbol
+			if in_math then
+				replacement = math_symbol
+			end
+			if replacement ~= nil then
+				metadata[id] = metadata[id] or {}
+				metadata[id].conceal = replacement
+			end
+		end
+	end
+end, { force = true })
+
+-- Load the supplementary symbol tables only when a query needs them.
+local lookup
+ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metadata)
+	local id = pred[2]
+	local nodes = match[id]
+	if not nodes or #nodes == 0 then
+		return
+	end
+
+	lookup = lookup or require("latex-conceal").lookup
+	for _, node in ipairs(nodes) do
+		local replacement = lookup(get_node_text(node, source), pred[3])
 		if replacement ~= nil then
 			metadata[id] = metadata[id] or {}
 			metadata[id].conceal = replacement
