@@ -130,3 +130,5 @@ ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metad
 		end
 	end
 end, { force = true })
+
+require("latex-conceal.render").setup()

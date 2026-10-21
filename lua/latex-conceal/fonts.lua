@@ -1,4 +1,4 @@
--- Single-symbol additions to the exact mappings in highlights.scm.
+-- Single-symbol additions to the exact mappings in conceals.scm.
 -- A conceal can contain one base character and combining marks, not a word.
 local M = {}
 

@@ -8,7 +8,7 @@ if vim.env.NVIM_TREESITTER then
 end
 vim.cmd.runtime("plugin/latex-conceal.lua")
 
-local query = assert(vim.treesitter.query.get("latex", "highlights"))
+local query = assert(vim.treesitter.query.get("latex", "conceals"))
 local tests, assertions, failures = 0, 0, {}
 
 local function eq(expected, actual, message)
