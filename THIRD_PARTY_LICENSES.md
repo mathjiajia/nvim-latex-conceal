@@ -5,8 +5,12 @@
 Supplementary LaTeX symbol data in `lua/latex-conceal/symbols.lua` is adapted
 from [pxwg/math-conceal.nvim](https://github.com/pxwg/math-conceal.nvim),
 revision `0c8dc9a63fe8f786333402e12c0b4ed3ae2ae5e1`.
+Additional symbol, font, and accent coverage was checked against revision
+`c456e87c608fa019f8a6e58c35e88161f450ba85`.
 The adapted tables omit existing replacements and unsuitable mappings, and add
-selected aliases. Font and accent coverage was compared with the same project.
+selected aliases. Unsupported Unicode styles and substitutions that change
+operator meaning are omitted. Text double brackets use the LaTeX kernel's
+Unicode characters U+27E6 and U+27E7.
 
 ```text
 MIT License

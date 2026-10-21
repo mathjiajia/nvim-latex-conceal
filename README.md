@@ -52,8 +52,11 @@ restore conceals with `:setlocal conceallevel=2`.
 - Fonts such as `\mathbb{Z}` → `ℤ`, `\mathbf{A}` → `𝐀`, and `\mathtt{x}` → `𝚡`.
 - Greek letters, upright variants, and Unicode mathematical alphabets.
 - Mathematical symbols, arrows, relations, integrals, and named delimiters.
+- Dashed-arrow aliases, geometric symbols, literal escaped characters, and `\qedhere`.
+- Upright alphabets and the available double-struck italic letters, such as `\symbbit{d}` → `ⅆ`.
 - Supported superscripts and subscripts.
 - Braced accents such as `\'{e}` → `é`, `\vec{x}` → `x⃗`, and `\hat{\alpha}` → `α̂`.
+- Single-symbol arrow accents such as `\overleftarrow{x}` → `x⃖` and `\overrightarrow{x}` → `x⃗`.
 - Fractions using `\frac`, `\dfrac`, `\tfrac`, and `\cfrac`.
 - Physics notation: `\bra{ψ}` → `⟨ψ|`, `\ket{ψ}` → `|ψ⟩`, `\abs{x}` → `|x|`, and `\norm{x}` → `‖x‖`.
 - Text symbol commands such as `\textalpha` and `\textdegree`.
@@ -69,6 +72,10 @@ The supplementary symbol table and font coverage were compared with
 Font and accent replacements apply to a single supported letter, digit, or
 Greek command in braces.
 Longer or unsupported arguments are not collapsed into a single character.
+The command `\div` remains visible for principal-divisor notation such as `\div(f)`.
+Operators such as `\exp`, `\Pr`, `\log`, and `\not`, controls such as `\quad`,
+`\qquad`, and `\nolimits`, and standalone combining enclosures retain their
+source. Unavailable Unicode styles are not replaced by a different alphabet.
 Typst and graphical equation rendering are outside this plugin's scope.
 See [third-party notices](THIRD_PARTY_LICENSES.md) for the symbol data attribution.
 

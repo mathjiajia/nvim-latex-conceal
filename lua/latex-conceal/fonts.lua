@@ -18,6 +18,7 @@ local function alphabet(upper, lower, digits, exceptions)
 end
 
 local styles = {
+	upright = alphabet(0x41, 0x61, 0x30),
 	bold = alphabet(0x1D400, 0x1D41A, 0x1D7CE),
 	italic = alphabet(0x1D434, 0x1D44E, nil, { h = "ℎ" }),
 	bolditalic = alphabet(0x1D468, 0x1D482),
@@ -28,6 +29,8 @@ local styles = {
 	boldscript = alphabet(0x1D4D0, 0x1D4EA),
 	fraktur = alphabet(0x1D504, 0x1D51E, nil, { C = "ℭ", H = "ℌ", I = "ℑ", R = "ℜ", Z = "ℨ" }),
 	double = alphabet(0x1D538, 0x1D552, 0x1D7D8, { C = "ℂ", H = "ℍ", N = "ℕ", P = "ℙ", Q = "ℚ", R = "ℝ", Z = "ℤ" }),
+	-- Unicode supplies only these five double-struck italic letters.
+	doubleitalic = { D = "ⅅ", d = "ⅆ", e = "ⅇ", i = "ⅈ", j = "ⅉ" },
 	boldfraktur = alphabet(0x1D56C, 0x1D586),
 	sans = alphabet(0x1D5A0, 0x1D5BA, 0x1D7E2),
 	boldsans = alphabet(0x1D5D4, 0x1D5EE, 0x1D7EC),
@@ -39,11 +42,13 @@ local styles = {
 -- These names specify Unicode alphabets; unavailable styles (e.g. italic
 -- digits or double-struck Greek) deliberately have no substitute.
 local font_styles = {
+	mathrm = "upright", mathup = "upright", symup = "upright", symrm = "upright",
 	mathbf = "bold", mathbfup = "bold", symbf = "bold", symbfup = "bold",
 	mathit = "italic", symit = "italic",
 	mathbfit = "bolditalic", symbfit = "bolditalic", bm = "bolditalic", boldsymbol = "bolditalic",
 	mathtt = "mono", symtt = "mono",
 	mathbb = "double", symbb = "double",
+	mathbbit = "doubleitalic", symbbit = "doubleitalic",
 	mathfrak = "fraktur", symfrak = "fraktur",
 	mathbffrak = "boldfraktur", symbffrak = "boldfraktur",
 	mathsf = "sans", mathsfup = "sans", symsf = "sans", symsfup = "sans",
@@ -89,9 +94,11 @@ local greek_styles = {
 -- Legacy math alphabet commands do not change Greek commands. The Unicode
 -- math styles and bm/boldsymbol do; bm preserves upright capitals/nabla.
 local greek_fonts = {
+	symup = "upright", symrm = "upright",
 	symit = "italic", symbfup = "bold", symbfit = "bolditalic",
 	symbfsfup = "boldsans", symbfsfit = "bolditalicsans",
 	symbf = "mixed", symbfsf = "boldsans", bm = "mixed", boldsymbol = "mixed",
+	mathbb = "double", symbb = "double",
 }
 
 for style, base in pairs(greek_styles) do
@@ -101,13 +108,23 @@ for style, base in pairs(greek_styles) do
 	end
 end
 styles.bold["\\Digamma"], styles.bold["\\digamma"] = "𝟊", "𝟋"
+styles.double["\\sum"] = "⅀"
 
-local greek_letters, mixed_greek = {}, {}
+local greek_letters, mixed_greek, bold_greek = {}, {}, {}
 for name, letter in pairs(greek) do
 	local command = "\\" .. name
 	greek_letters[command] = letter
+	styles.upright[command] = letter
 	local upright = name:match("^%u") or name == "nabla" or name == "digamma"
 	mixed_greek[command] = (upright and styles.bold or styles.bolditalic)[command]
+	bold_greek[command] = mixed_greek[command]
+	if name:match("^%l") and name ~= "partial" and name ~= "nabla" then
+		-- Explicitly upright Greek stays upright under bm/boldsymbol.
+		bold_greek["\\up" .. name] = styles.bold[command]
+	end
+end
+for name in ("Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega"):gmatch("%a+") do
+	bold_greek["\\Up" .. name:lower()] = styles.bold["\\" .. name]
 end
 
 for command, style in pairs(font_styles) do
@@ -116,10 +133,12 @@ end
 for command, style in pairs(greek_fonts) do
 	greek_fonts[command] = style == "mixed" and mixed_greek or styles[style]
 end
+greek_fonts.bm, greek_fonts.boldsymbol = bold_greek, bold_greek
 
 local accents = {
 	acute = "́", grave = "̀", breve = "̆", check = "̌", ddot = "̈",
 	dddot = "⃛", ddddot = "⃜", vec = "⃗", dot = "̇",
+	overleftarrow = "⃖", overrightarrow = "⃗",
 	bar = "̅", overline = "̅", hat = "̂", widehat = "̂", tilde = "̃", widetilde = "̃",
 }
 
@@ -156,10 +175,8 @@ function M.lookup(full_command)
 			end
 			return greek_letter .. accent
 		end
-		local alphabet_map = greek_fonts[command]
-		return alphabet_map and alphabet_map[body]
 	end
-	local alphabet_map = font_styles[command]
+	local alphabet_map = (body:sub(1, 1) == "\\" and greek_fonts or font_styles)[command]
 	if alphabet_map then
 		return alphabet_map[body]
 	end

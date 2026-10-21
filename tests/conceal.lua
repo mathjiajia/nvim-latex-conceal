@@ -126,6 +126,41 @@ test("symbol and font mappings", function ()
 	end
 end)
 
+test("additional TeX symbols and dashed-arrow aliases", function ()
+	for _, pair in ipairs({
+		{ [[\dashrightarrow]], "⇢" }, { [[\dasharrow]], "⇢" }, { [[\dashleftarrow]], "⇠" },
+		{ [[\hzigzag]], "〰" },
+		{ [[\lgblksquare]], "⬛" }, { [[\lgwhtsquare]], "⬜" },
+		{ [[\mdblkcircle]], "⚫" }, { [[\mdwhtcircle]], "⚪" },
+		{ [[\mdsmblksquare]], "◾" }, { [[\mdsmwhtsquare]], "◽" },
+		{ [[\medwhitestar]], "⭐" }, { [[\postalmark]], "〒" },
+	}) do
+		local command = pair[1]
+		replacement("$a " .. command .. " b$", command, pair[2])
+		eq({}, values("$\\text{" .. command .. "}$", command), "math symbols do not replace text commands")
+		eq({}, values("\\label{" .. command .. "}", command), "labels retain their source")
+	end
+end)
+
+test("escaped text characters and proof symbols work in both modes", function ()
+	for _, pair in ipairs({
+		{ [[\_]], "_" }, { [[\#]], "#" }, { [[\$]], "$" },
+		{ [[\%]], "%" }, { [[\&]], "&" }, { [[\{]], "{" }, { [[\}]], "}" },
+		{ [[\P]], "¶" }, { [[\S]], "§" }, { [[\qedhere]], "□" },
+	}) do
+		local command = pair[1]
+		for _, source in ipairs({ command, "$" .. command .. "$", "$\\text{" .. command .. "}$" }) do
+			replacement(source, command, pair[2])
+		end
+		eq({}, values("\\label{" .. command .. "}", command), "label contents are not concealed")
+	end
+	for _, pair in ipairs({ { [[\textlbrackdbl]], "⟦" }, { [[\textrbrackdbl]], "⟧" } }) do
+		replacement(pair[1], pair[1], pair[2])
+		replacement("$\\text{" .. pair[1] .. "}$", pair[1], pair[2])
+		eq({}, values("$" .. pair[1] .. "$", pair[1]), "text brackets require text context")
+	end
+end)
+
 test("additional mathematical alphabets", function ()
 	for _, pair in ipairs({
 		{ [[\mathbf{A}]], "𝐀" },
@@ -162,10 +197,37 @@ test("additional mathematical alphabets", function ()
 	end
 end)
 
+test("upright and double-struck italic alphabets", function ()
+	for _, pair in ipairs({
+		{ [[\mathrm{R}]], "R" }, { [[\mathup{0}]], "0" },
+		{ [[\symup{A}]], "A" }, { [[\symrm{a}]], "a" },
+		{ [[\symup{\alpha}]], "α" }, { [[\symrm{\Gamma}]], "Γ" },
+		{ [[\symbbit{D}]], "ⅅ" }, { [[\mathbbit{d}]], "ⅆ" },
+		{ [[\symbbit{e}]], "ⅇ" }, { [[\mathbbit{i}]], "ⅈ" }, { [[\symbbit{j}]], "ⅉ" },
+		{ [[\mathbb{\sum}]], "⅀" }, { [[\symbb{\sum}]], "⅀" },
+		{ [[\bm{\upalpha}]], "𝛂" }, { [[\boldsymbol{\Upgamma}]], "𝚪" },
+		{ [[\bm{\upvarrho}]], "𝛠" }, { [[\bm{\upvarsigma}]], "𝛓" },
+	}) do
+		local command = pair[1]
+		replacement("$" .. command .. "$", command, pair[2])
+		eq({}, values("$\\text{" .. command .. "}$", command), "font mappings require math context")
+	end
+	for _, command in ipairs({
+		[[\symbbit{A}]], [[\mathbbit{0}]], [[\symbbit{\alpha}]],
+		[[\symbfit{1}]], [[\symsf{\alpha}]], [[\mathrm{AB}]], [[\symup{\unknown}]],
+	}) do
+		eq({}, values("$" .. command .. "$", command), "unavailable alphabets and compound arguments stay visible")
+	end
+end)
+
 test("operator words and unsupported spacing commands stay visible", function ()
-	for _, command in ipairs({ [[\exp]], [[\Pr]], [[\not]], [[\quad]], [[\qquad]] }) do
+	for _, command in ipairs({
+		[[\div]], [[\exp]], [[\Pr]], [[\not]], [[\lg]], [[\ln]], [[\log]],
+		[[\quad]], [[\qquad]], [[\nolimits]], [[\enclosecircle]],
+	}) do
 		eq({}, values("$" .. command .. " x$", command), command)
 	end
+	eq({}, values([[\(\div(f)\)]], [[\div]]), "principal-divisor notation stays visible")
 end)
 
 test("text symbols respect text and label contexts", function ()
@@ -234,6 +296,8 @@ test("accent mappings", function ()
 		{ [[\hat{x}]], "x̂" },
 		{ [[\hat{\alpha}]], "α̂" },
 		{ [[\vec{x}]], "x⃗" },
+		{ [[\overleftarrow{x}]], "x⃖" },
+		{ [[\overrightarrow{\alpha}]], "α⃗" },
 		{ [[\ddot{x}]], "ẍ" },
 		{ [[\bar{\alpha}]], "α̅" },
 		{ [[\bar{\partial}]], "∂̅" },
@@ -243,7 +307,10 @@ test("accent mappings", function ()
 		replacement("$" .. pair[1] .. "$", pair[1], pair[2])
 	end
 	eq({}, values([[$\mathbb{RR}$]], [[\mathbb{RR}]]), "unmapped arguments remain visible")
-	for _, command in ipairs({ [[\vec{xy}]], [[\vec{}]], [[\vec{x}{y}]], [[\hat{\unknown}]] }) do
+	for _, command in ipairs({
+		[[\vec{xy}]], [[\vec{}]], [[\vec{x}{y}]], [[\hat{\unknown}]],
+		[[\overleftarrow{xy}]], [[\overrightarrow{}]], [[\overrightarrow{x}{y}]],
+	}) do
 		eq({}, values("$" .. command .. "$", command), "unsupported accent arguments stay visible: " .. command)
 	end
 end)
