@@ -51,7 +51,7 @@ local function parser_state(parser)
 			on_changedtree = changed,
 			on_child_added = bump,
 			on_child_removed = reset,
-			on_detach = reset,
+			on_detach = reset
 		}, true)
 		parsers[parser] = state
 	end
@@ -62,8 +62,7 @@ end
 local function trim_changes(state, tick)
 	local low = state.version
 	for _, cached in pairs(windows) do
-		if cached.parser_state == state and cached.tick == tick
-			and cached.version >= state.reset and cached.version < low then
+		if cached.parser_state == state and cached.tick == tick and cached.version >= state.reset and cached.version < low then
 			low = cached.version
 		end
 	end
@@ -94,7 +93,7 @@ end
 -- between equal priorities, and conceals must follow the same numbering.
 local function build_index(state, active)
 	local index, n, has_query = {}, 0, {}
-	active.tree:for_each_tree(function(tree, language_tree)
+	active.tree:for_each_tree(function (tree, language_tree)
 		local lang = language_tree:lang()
 		local counted = has_query[lang]
 		if counted == nil then
@@ -129,8 +128,11 @@ local function latex_trees(index, first, last)
 			local tree = entry.tree
 			n = n + 1
 			trees[n] = {
-				tree = tree, root = tree:root(), first = entry.first, last = entry.last,
-				included = tree:included_ranges(true),
+				tree = tree,
+				root = tree:root(),
+				first = entry.first,
+				last = entry.last,
+				included = tree:included_ranges(true)
 			}
 		end
 	end
@@ -179,11 +181,19 @@ local function collect(buf, cached, first, last)
 					for _, region in ipairs(included) do
 						local sr, sc, er, ec = intersection(range, region)
 						if sr and er + (ec > 0 and 1 or 0) <= line_count then
-							local mark = { sr, sc, {
-								end_row = er, end_col = ec,
-								conceal = conceal, hl_group = hl_group, priority = priority,
-								ephemeral = true,
-							}, tree }
+							local mark = {
+								sr,
+								sc,
+								{
+									end_row = er,
+									end_col = ec,
+									conceal = conceal,
+									hl_group = hl_group,
+									priority = priority,
+									ephemeral = true
+								},
+								tree
+							}
 							for row = math.max(first, sr), math.min(last - 1, er - (ec == 0 and 1 or 0)) do
 								local marks = rows[row]
 								if not marks then
@@ -261,8 +271,7 @@ local function on_win(_, win, buf, top, bottom)
 	local cached = windows[win]
 	if cached and cached.buf == buf and cached.parser == parser and cached.tick == tick and cached.query == query
 		and cached.version >= state.reset and cached.first <= top and cached.last >= last
-		and (not cached.sparse or cached.view_first == top and cached.view_last == last)
-		and parser:is_valid(true) then
+		and (not cached.sparse or cached.view_first == top and cached.view_last == last) and parser:is_valid(true) then
 		if cached.version ~= state.version then
 			apply_changes(cached, state)
 			if #state.changes > change_limit / 2 then
@@ -290,12 +299,12 @@ local function on_win(_, win, buf, top, bottom)
 	local ranges = { { first, last } }
 	local tab = api.nvim_win_get_tabpage(win)
 	for other, cache in pairs(windows) do
-		if other ~= win and cache.parser == parser and api.nvim_win_is_valid(other)
-			and api.nvim_win_get_buf(other) == buf and api.nvim_win_get_tabpage(other) == tab then
+		if other ~= win and cache.parser == parser and api.nvim_win_is_valid(other) and api.nvim_win_get_buf(other) == buf
+			and api.nvim_win_get_tabpage(other) == tab then
 			ranges[#ranges + 1] = { cache.first, cache.last }
 		end
 	end
-	table.sort(ranges, function(a, b)
+	table.sort(ranges, function (a, b)
 		return a[1] < b[1]
 	end)
 	parser:parse(ranges)
@@ -303,12 +312,24 @@ local function on_win(_, win, buf, top, bottom)
 		build_index(state, active)
 	end
 	local next_cache = {
-		buf = buf, parser = parser, parser_state = state, query = query, version = state.version, tick = tick,
-		first = first, last = last, line_count = line_count, trees = latex_trees(state.index, first, last),
+		buf = buf,
+		parser = parser,
+		parser_state = state,
+		query = query,
+		version = state.version,
+		tick = tick,
+		first = first,
+		last = last,
+		line_count = line_count,
+		trees = latex_trees(state.index, first, last),
 		priorities = tree_priorities(state.index, top, bottom),
-		priorities_version = state.version, top = top, bottom = bottom,
+		priorities_version = state.version,
+		top = top,
+		bottom = bottom,
 		ready = deferred and {} or nil,
-		sparse = sparse, view_first = top, view_last = view_last,
+		sparse = sparse,
+		view_first = top,
+		view_last = view_last
 	}
 	next_cache.rows = deferred and {} or collect(buf, next_cache, first, last)
 	windows[win] = next_cache
@@ -371,26 +392,26 @@ function M.setup()
 	local group = api.nvim_create_augroup("latex-conceal", {})
 	api.nvim_create_autocmd({ "BufUnload", "BufWipeout" }, {
 		group = group,
-		callback = function(event)
+		callback = function (event)
 			for win, cached in pairs(windows) do
 				if cached.buf == event.buf then
 					windows[win] = nil
 				end
 			end
-		end,
+		end
 	})
 	api.nvim_create_autocmd("WinClosed", {
 		group = group,
-		callback = function(event)
+		callback = function (event)
 			windows[tonumber(event.match)] = nil
-		end,
+		end
 	})
 	api.nvim_create_autocmd("ColorScheme", {
 		group = group,
-		callback = function()
+		callback = function ()
 			highlights = {}
 			windows = {}
-		end,
+		end
 	})
 end
 

@@ -16,7 +16,7 @@ end
 -- argument list. Weak keys release the caches when queries are reloaded.
 local pred_cache = setmetatable({}, { __mode = "k" })
 
----@param pred any[]
+---@param pred  any[]
 ---@param first integer index of the first type name in `pred`
 ---@return table<string, true>
 local function type_set(pred, first)
@@ -32,7 +32,7 @@ local function type_set(pred, first)
 end
 
 ---@param metadata table
----@param id integer
+---@param id       integer
 ---@return table
 local function capture_metadata(metadata, id)
 	local entry = metadata[id]
@@ -81,7 +81,7 @@ local function enclosing(node)
 end
 
 ---@param match table<integer, TSNode[]>
----@param pred any[]
+---@param pred  any[]
 local function in_script(match, _, _, pred)
 	local nodes = match[pred[2]]
 	if not nodes or #nodes == 0 then
@@ -147,9 +147,7 @@ local function load_symbols()
 end
 
 -- Emphasis wrappers are hidden in every context, like the braces they own.
-local hidden_commands = {
-	["\\emph"] = "", ["\\mathit"] = "", ["\\textit"] = "", ["\\mathbf"] = "", ["\\textbf"] = "",
-}
+local hidden_commands = { ["\\emph"] = "", ["\\mathit"] = "", ["\\textit"] = "", ["\\mathbf"] = "", ["\\textbf"] = "" }
 
 -- The query excludes labels; enclosing text takes precedence over math.
 ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metadata)
@@ -194,7 +192,8 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 			capture_metadata(metadata, id).conceal = replacement
 		end
 	end
-end, { force = true })
+end, { force = true }
+)
 
 local lookup
 ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metadata)
@@ -211,7 +210,8 @@ ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metad
 			capture_metadata(metadata, id).conceal = replacement
 		end
 	end
-end, { force = true })
+end, { force = true }
+)
 
 -- Math context for font alphabets: inside math and outside labels and text.
 ---@param node TSNode
@@ -274,7 +274,8 @@ ts.query.add_directive("latex-argument!", function (match, _, source, pred, meta
 			end
 		end
 	end
-end, { force = true })
+end, { force = true }
+)
 
 -- Preserve the script captures that can also carry a custom @conceal color.
 -- In particular, some unsupported braced superscript letters were highlighted
@@ -318,7 +319,8 @@ ts.query.add_predicate("latex-script-supported?", function (match, _, source, pr
 		end
 	end
 	return false
-end, { force = true })
+end, { force = true }
+)
 
 -- A predicate rejects unsupported captures; this directive assigns replacements.
 ts.query.add_directive("latex-script!", function (match, _, source, pred, metadata)
@@ -334,7 +336,8 @@ ts.query.add_directive("latex-script!", function (match, _, source, pred, metada
 			capture_metadata(metadata, id).conceal = replacement
 		end
 	end
-end, { force = true })
+end, { force = true }
+)
 
 -- Hide `_` or `^` only when the entire braced value has a replacement.
 ts.query.add_predicate("latex-script-marker?", function (match, _, source, pred)
@@ -354,13 +357,14 @@ ts.query.add_predicate("latex-script-marker?", function (match, _, source, pred)
 		end
 	end
 	return false
-end, { force = true })
+end, { force = true }
+)
 
 local delimiters = {
 	["\\bra"] = { "⟨", "|" },
 	["\\ket"] = { "|", "⟩" },
 	["\\abs"] = { "|", "|" },
-	["\\norm"] = { "‖", "‖" },
+	["\\norm"] = { "‖", "‖" }
 }
 ts.query.add_directive("latex-delimiters!", function (match, _, source, pred, metadata)
 	local command, close = pred[2], pred[3]
@@ -375,6 +379,7 @@ ts.query.add_directive("latex-delimiters!", function (match, _, source, pred, me
 			capture_metadata(metadata, close).conceal = pair[2]
 		end
 	end
-end, { force = true })
+end, { force = true }
+)
 
 require("latex-conceal.render").setup()

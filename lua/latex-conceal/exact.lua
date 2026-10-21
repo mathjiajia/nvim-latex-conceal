@@ -780,7 +780,7 @@ return {
 		["\\mathsf{W}"] = "𝖶",
 		["\\mathsf{X}"] = "𝖷",
 		["\\mathsf{Y}"] = "𝖸",
-		["\\mathsf{Z}"] = "𝖹",
+		["\\mathsf{Z}"] = "𝖹"
 	},
 	bar = {
 		-- \bar
@@ -837,7 +837,7 @@ return {
 		["\\bar{\\varpi}"] = "ϖ̅",
 		["\\bar{\\varrho}"] = "ϱ̅",
 		["\\bar{\\varsigma}"] = "ς̅",
-		["\\bar{\\varphi}"] = "φ̅",
+		["\\bar{\\varphi}"] = "φ̅"
 	},
 	overline = {
 		-- \overline
@@ -894,6 +894,6 @@ return {
 		["\\overline{\\varpi}"] = "ϖ̅",
 		["\\overline{\\varrho}"] = "ϱ̅",
 		["\\overline{\\varsigma}"] = "ς̅",
-		["\\overline{\\varphi}"] = "φ̅",
-	},
+		["\\overline{\\varphi}"] = "φ̅"
+	}
 }
