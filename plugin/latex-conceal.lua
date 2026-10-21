@@ -35,6 +35,30 @@ local function has_grandparent(match, _, _, pred)
 	return false
 end
 
+-- Grouping braces preserve a script's context; commands and nested scripts own theirs.
+---@param match table<integer, TSNode[]>
+---@param pred any[]
+local function in_script(match, _, _, pred)
+	local nodes = match[pred[2]]
+	if not nodes or #nodes == 0 then
+		return true
+	end
+	for _, node in ipairs(nodes) do
+		local parent = node:parent()
+		while parent do
+			local kind = parent:type()
+			if kind ~= "text" and kind ~= "curly_group" then
+				if kind == pred[3] then
+					return true
+				end
+				break
+			end
+			parent = parent:parent()
+		end
+	end
+	return false
+end
+
 -- Query arguments are immutable. Weak keys release maps when queries are reloaded.
 local pair_maps = setmetatable({}, { __mode = "k" })
 
@@ -71,6 +95,7 @@ local function set_pairs(match, _, source, pred, metadata)
 end
 
 ts.query.add_predicate("has-grandparent?", has_grandparent, { force = true })
+ts.query.add_predicate("latex-script?", in_script, { force = true })
 ts.query.add_directive("set-pairs!", set_pairs, { force = true })
 
 local math_nodes = { math_environment = true, inline_formula = true, displayed_equation = true }
@@ -112,7 +137,7 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 	end
 end, { force = true })
 
--- Load the supplementary symbol tables only when a query needs them.
+-- Load each replacement table only when a query needs it.
 local lookup
 ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metadata)
 	local id = pred[2]
@@ -127,6 +152,29 @@ ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metad
 		if replacement ~= nil then
 			metadata[id] = metadata[id] or {}
 			metadata[id].conceal = replacement
+		end
+	end
+end, { force = true })
+
+local delimiters = {
+	["\\bra"] = { "⟨", "|" },
+	["\\ket"] = { "|", "⟩" },
+	["\\abs"] = { "|", "|" },
+	["\\norm"] = { "‖", "‖" },
+}
+ts.query.add_directive("latex-delimiters!", function (match, _, source, pred, metadata)
+	local command, close = pred[2], pred[3]
+	local nodes = match[command]
+	if not nodes or #nodes == 0 then
+		return
+	end
+	for _, node in ipairs(nodes) do
+		local pair = delimiters[get_node_text(node, source)]
+		if pair then
+			metadata[command] = metadata[command] or {}
+			metadata[command].conceal = pair[1]
+			metadata[close] = metadata[close] or {}
+			metadata[close].conceal = pair[2]
 		end
 	end
 end, { force = true })

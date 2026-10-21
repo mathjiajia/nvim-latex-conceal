@@ -57,11 +57,14 @@ vim.treesitter.query.get = setmetatable({
 })
 
 vim.cmd.runtime("plugin/latex-conceal.lua")
+-- Keep installed copies of the plugin out of the query under test.
+local conceal_query = table.concat(vim.fn.readfile(root .. "/queries/latex/conceals.scm"), "\n"):gsub("^; extends\n", "")
+vim.treesitter.query.set("latex", "conceals", conceal_query)
 local renderer = require("latex-conceal.render")
 renderer.setup()
 assert(provider and provider.on_win and provider.on_range, "renderer did not register its decoration provider")
 
-local tests, assertions, failures = 0, 0, {}
+local tests, assertions, skipped, failures = 0, 0, 0, {}
 local original_win = api.nvim_get_current_win()
 local original_buf = api.nvim_get_current_buf()
 local original_conceallevel = vim.wo[original_win][0].conceallevel
@@ -76,7 +79,7 @@ local function eq(expected, actual, message)
 end
 
 local function cleanup()
-	vim.treesitter.query.set("latex", "conceals", nil)
+	vim.treesitter.query.set("latex", "conceals", conceal_query)
 	for _, win in ipairs(windows) do
 		if api.nvim_win_is_valid(win) then
 			api.nvim_win_close(win, true)
@@ -94,11 +97,15 @@ local function cleanup()
 end
 
 local function test(name, fn)
-	tests = tests + 1
-	local ok, err = xpcall(fn, debug.traceback)
+	local ok, result = xpcall(fn, debug.traceback)
 	cleanup()
 	if not ok then
-		failures[#failures + 1] = name .. ": " .. err
+		failures[#failures + 1] = name .. ": " .. result
+	elseif result then
+		skipped = skipped + 1
+		print("SKIP " .. name .. ": " .. result)
+	else
+		tests = tests + 1
 	end
 end
 
@@ -165,6 +172,19 @@ test("same-shape command edits invalidate completed results", function ()
 	count = #query_calls
 	draw(original_win, buf)
 	eq(count, #query_calls, "the edited result is cached")
+end)
+
+test("font commands inside scripts retain a single replacement across edits", function ()
+	local buf = buffer([[\(m_{\mathbb{R}}\)]])
+	local first = draw(original_win, buf)
+	local replacements = conceals(first)
+	eq("ℝ", replacements["\\mathbb{R}"])
+	eq(nil, replacements.R, "the font argument must not also become a subscript")
+	eq(first, draw(original_win, buf), "cached redraws retain the same font replacement")
+	api.nvim_buf_set_lines(buf, 0, -1, false, { [[\(m^{\mathbb{Q}}\)]] })
+	replacements = conceals(draw(original_win, buf))
+	eq("ℚ", replacements["\\mathbb{Q}"])
+	eq(nil, replacements.Q, "the edited font argument must not also become a superscript")
 end)
 
 test("after an edit only repainted rows refill and empty results are cached", function ()
@@ -264,6 +284,52 @@ test("query replacement invalidates cached metadata", function ()
 	eq("Q", conceals(draw(original_win, buf))["\\alpha"], "query.set takes effect on the next redraw")
 	vim.treesitter.query.set("latex", "conceals", "")
 	eq({}, conceals(draw(original_win, buf)), "removing query patterns clears previous results")
+end)
+
+test("custom queries preserve highlights, offsets and metadata precedence", function ()
+	vim.treesitter.query.set("latex", "conceals", [[
+		((command_name) @keyword
+		  (#eq? @keyword "\\alpha")
+		  (#offset! @keyword 0 1 0 0)
+		  (#set! @keyword priority 140))
+		((command_name) @conceal
+		  (#eq? @conceal "\\beta")
+		  (#set! conceal "B")
+		  (#set! @conceal conceal "C")
+		  (#set! priority 151)
+		  (#set! @conceal priority 150))
+		(generic_command
+		  command: (command_name) @_command
+		  arg: (curly_group) @number
+		  (#eq? @_command "\\foo")
+		  (#offset! @number 0 1 0 -1)
+		  (#set! @number conceal "N")
+		  (#set! @number priority 152))
+	]])
+	local source = [[$\alpha + \beta + \foo{42}$]]
+	local buf = buffer(source)
+	local first = draw(original_win, buf)
+	local visible = {}
+	for _, mark in ipairs(first) do
+		-- Internal helper captures may be omitted because they have no display effect.
+		if mark.opts.hl_group ~= 0 or mark.opts.conceal ~= nil then
+			visible[mark.opts.hl_group] = mark
+		end
+	end
+	local function check(name, text, conceal, priority)
+		local mark = visible[api.nvim_get_hl_id_by_name("@" .. name .. ".latex")]
+		eq(true, mark ~= nil, name .. " retains its decoration")
+		local start, finish = source:find(text, 1, true)
+		eq({ 0, start - 1, 0, finish },
+			{ mark.row, mark.column, mark.opts.end_row, mark.opts.end_col }, "offsets preserve byte ranges")
+		eq(conceal, mark.opts.conceal)
+		eq(priority, mark.opts.priority)
+	end
+	check("keyword", "alpha", nil, 140)
+	check("conceal", [[\beta]], "B", 151)
+	check("number", "42", "N", 152)
+	eq(3, vim.tbl_count(visible), "helper captures introduce no visible decoration")
+	eq(first, draw(original_win, buf), "cached results preserve custom highlight and conceal metadata")
 end)
 
 test("viewport caches remain bounded and reuse their scroll margin", function ()
@@ -385,8 +451,7 @@ end)
 test("Markdown injections are cached and respond to edits", function ()
 	for _, language in ipairs({ "markdown", "markdown_inline" }) do
 		if not pcall(vim.treesitter.language.add, language) then
-			print("SKIP Markdown injection: missing " .. language .. " parser")
-			return
+			return "missing " .. language .. " parser"
 		end
 	end
 	local buf, parser = buffer({ [[Inline $\alpha + x_1$.]], "", [[$$\beta$$]] }, "markdown")
@@ -408,7 +473,62 @@ test("Markdown injections are cached and respond to edits", function ()
 	eq("γ", conceals(draw(original_win, buf))["\\gamma"], "new injections are discovered")
 end)
 
+test("custom ranges stay inside separate Markdown math injections", function ()
+	for _, language in ipairs({ "markdown", "markdown_inline" }) do
+		if not pcall(vim.treesitter.language.add, language) then
+			return "missing " .. language .. " parser"
+		end
+	end
+	vim.treesitter.query.set("latex", "conceals", [[
+		((source_file) @conceal
+		  (#offset! @conceal 0 -2 0 2)
+		  (#set! conceal "X")
+		  (#set! priority 143))
+	]])
+	local source = [[Before $\alpha$ between $\beta$ after.]]
+	local buf, parser = buffer(source, "markdown")
+	parser:parse({ 0, 1 })
+	local first = draw(original_win, buf)
+	eq(2, #first, "each injected formula receives one decoration")
+	for i, formula in ipairs({ [[$\alpha$]], [[$\beta$]] }) do
+		local start, finish = source:find(formula, 1, true)
+		local mark = first[i]
+		eq({ 0, start - 1, 0, finish },
+			{ mark.row, mark.column, mark.opts.end_row, mark.opts.end_col },
+			"offsets cannot conceal the prose surrounding an injection")
+		eq("X", mark.opts.conceal)
+		eq(143, mark.opts.priority)
+	end
+	eq(first, draw(original_win, buf), "cached ranges remain clipped to their injections")
+end)
+
+test("scrolling discovers newly exposed Markdown injections", function ()
+	for _, language in ipairs({ "markdown", "markdown_inline" }) do
+		if not pcall(vim.treesitter.language.add, language) then
+			return "missing " .. language .. " parser"
+		end
+	end
+	local lines = {}
+	for row = 1, 100 do
+		lines[row] = row % 2 == 0 and "" or "Ordinary text."
+	end
+	lines[1], lines[71] = [[$\alpha$]], [[$\beta$]]
+	local buf, parser = buffer(lines, "markdown")
+	parser:parse({ 0, 3 })
+	eq("α", conceals(draw(original_win, buf, 0, 2))["\\alpha"])
+	-- Native highlighting discovers the newly visible injections before this provider.
+	parser:parse({ 70, 73 })
+	local shown = conceals(draw(original_win, buf, 70, 72))
+	eq("β", shown["\\beta"], "newly exposed formulas are included after scrolling")
+	eq(nil, shown["\\alpha"], "the previous viewport's formulas are not replayed")
+	local count = #query_calls
+	eq(shown, conceals(draw(original_win, buf, 70, 72)))
+	eq(count, #query_calls, "newly discovered injection results are cached")
+	parser:parse({ 0, 3 })
+	eq("α", conceals(draw(original_win, buf, 0, 2))["\\alpha"], "scrolling back restores the earlier formula")
+end)
+
 if #failures > 0 then
 	error(table.concat(failures, "\n\n"), 0)
 end
-print(("Passed %d renderer tests (%d assertions)"):format(tests, assertions))
+print(("Passed %d renderer tests (%d assertions; %d skipped)"):format(tests, assertions, skipped))

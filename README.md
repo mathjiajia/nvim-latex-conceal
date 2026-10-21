@@ -76,6 +76,7 @@ See [third-party notices](THIRD_PARTY_LICENSES.md) for the symbol data attributi
 
 Conceal patterns live in `queries/latex/conceals.scm`. Custom patterns can extend
 the `conceals` query independently of ordinary highlighting queries.
+Exact font and accent mappings live in `lua/latex-conceal/exact.lua`.
 
 With the parsers and queries on Neovim's runtime path, run:
 

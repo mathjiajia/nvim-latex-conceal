@@ -60,9 +60,9 @@ local function intersection(a, b)
 	return first[1], first[2], last[4], last[5]
 end
 
-local function collect(buf, parser, query, first, last)
-	local rows = {}
-	local line_count = api.nvim_buf_line_count(buf)
+-- Reuse tree geometry while deferred repaint ranges fill this cache generation.
+local function latex_trees(parser, first, last)
+	local trees = {}
 	parser:for_each_tree(function(tree, language)
 		if language:lang() ~= "latex" then
 			return
@@ -72,32 +72,47 @@ local function collect(buf, parser, query, first, last)
 		if start_row >= last or end_row < first then
 			return
 		end
-		local included = tree:included_ranges(true)
-		for id, node, metadata in query:iter_captures(root, buf, first, last) do
-			local capture = metadata[id]
-			local conceal = metadata.conceal
-			if conceal == nil and capture then
-				conceal = capture.conceal
-			end
-			local priority = tonumber(metadata.priority or capture and capture.priority) or vim.hl.priorities.treesitter
-			local name = query.captures[id]
-			local range = ts.get_range(node, buf, capture)
-			for _, region in ipairs(included) do
-				local sr, sc, er, ec = intersection(range, region)
-				if sr and er + (ec > 0 and 1 or 0) <= line_count then
-					local mark = { sr, sc, {
-						end_row = er, end_col = ec,
-						conceal = conceal, hl_group = highlight(name), priority = priority,
-						ephemeral = true,
-					}, tree }
-					for row = math.max(first, sr), math.min(last - 1, er - (ec == 0 and 1 or 0)) do
-						rows[row] = rows[row] or {}
-						rows[row][#rows[row] + 1] = mark
+		trees[#trees + 1] = {
+			tree = tree, root = root, first = start_row, last = end_row,
+			included = tree:included_ranges(true),
+		}
+	end)
+	return trees
+end
+
+local function collect(buf, cached, first, last)
+	local rows = {}
+	local query = cached.query
+	for _, entry in ipairs(cached.trees) do
+		if entry.first < last and entry.last >= first then
+			for id, node, metadata in query:iter_captures(entry.root, buf, first, last) do
+				local capture = metadata[id]
+				local conceal = metadata.conceal
+				if conceal == nil and capture then
+					conceal = capture.conceal
+				end
+				local hl_group = highlight(query.captures[id])
+				if conceal ~= nil or hl_group ~= 0 then
+					local priority = tonumber(metadata.priority or capture and capture.priority) or vim.hl.priorities.treesitter
+					local range = ts.get_range(node, buf, capture)
+					for _, region in ipairs(entry.included) do
+						local sr, sc, er, ec = intersection(range, region)
+						if sr and er + (ec > 0 and 1 or 0) <= cached.line_count then
+							local mark = { sr, sc, {
+								end_row = er, end_col = ec,
+								conceal = conceal, hl_group = hl_group, priority = priority,
+								ephemeral = true,
+							}, entry.tree }
+							for row = math.max(first, sr), math.min(last - 1, er - (ec == 0 and 1 or 0)) do
+								rows[row] = rows[row] or {}
+								rows[row][#rows[row] + 1] = mark
+							end
+						end
 					end
 				end
 			end
 		end
-	end)
+	end
 	return rows
 end
 
@@ -127,7 +142,8 @@ local function on_win(_, win, buf, top, bottom)
 		windows[win] = nil
 		return false
 	end
-	local last = math.min(api.nvim_buf_line_count(buf), bottom + 1)
+	local line_count = api.nvim_buf_line_count(buf)
+	local last = math.min(line_count, bottom + 1)
 	local sparse = last - top > api.nvim_win_get_height(win) + 1
 	local tick = api.nvim_buf_get_changedtick(buf)
 	local cached = windows[win]
@@ -147,7 +163,7 @@ local function on_win(_, win, buf, top, bottom)
 	local padding = not deferred and nearby and margin or 0
 	local first = math.max(0, top - padding)
 	local view_last = last
-	last = math.min(api.nvim_buf_line_count(buf), last + padding)
+	last = math.min(line_count, last + padding)
 	-- Reparse only the requested region, including injections, rather than the entire document.
 	-- Keep the other splits' regions valid too: a parse replaces the injection-validity range.
 	local ranges = { { first, last } }
@@ -162,13 +178,15 @@ local function on_win(_, win, buf, top, bottom)
 		return a[1] < b[1]
 	end)
 	parser:parse(ranges)
-	local rows = deferred and {} or collect(buf, parser, query, first, last)
-	windows[win] = {
+	local next_cache = {
 		buf = buf, parser = parser, query = query, version = state.version, tick = tick,
-		first = first, last = last, rows = rows, priorities = tree_priorities(active, top, bottom),
+		first = first, last = last, line_count = line_count, trees = latex_trees(parser, first, last),
+		priorities = tree_priorities(active, top, bottom),
 		ready = deferred and {} or nil,
 		sparse = sparse, view_first = top, view_last = view_last,
 	}
+	next_cache.rows = deferred and {} or collect(buf, next_cache, first, last)
+	windows[win] = next_cache
 	return true
 end
 
@@ -189,7 +207,7 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 				repeat
 					row = row + 1
 				until row == last or cached.ready[row]
-				local rows = collect(buf, cached.parser, cached.query, start, row)
+				local rows = collect(buf, cached, start, row)
 				for line = start, row - 1 do
 					cached.rows[line] = rows[line]
 					cached.ready[line] = true
@@ -199,12 +217,15 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 	end
 	serial = serial + 1
 	for row = first, last - 1 do
-		for _, mark in ipairs(cached.rows[row] or {}) do
-			local priority = cached.priorities[mark[4]]
-			if priority and mark.serial ~= serial then
-				mark.serial = serial
-				mark[3]._subpriority = priority
-				api.nvim_buf_set_extmark(buf, namespace, mark[1], mark[2], mark[3])
+		local marks = cached.rows[row]
+		if marks then
+			for _, mark in ipairs(marks) do
+				local priority = cached.priorities[mark[4]]
+				if priority and mark.serial ~= serial then
+					mark.serial = serial
+					mark[3]._subpriority = priority
+					api.nvim_buf_set_extmark(buf, namespace, mark[1], mark[2], mark[3])
+				end
 			end
 		end
 	end

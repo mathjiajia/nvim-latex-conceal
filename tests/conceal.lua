@@ -8,8 +8,11 @@ if vim.env.NVIM_TREESITTER then
 end
 vim.cmd.runtime("plugin/latex-conceal.lua")
 
+-- Test this checkout even when another version is installed on the runtime path.
+local conceal_query = table.concat(vim.fn.readfile(root .. "/queries/latex/conceals.scm"), "\n"):gsub("^; extends\n", "")
+vim.treesitter.query.set("latex", "conceals", conceal_query)
 local query = assert(vim.treesitter.query.get("latex", "conceals"))
-local tests, assertions, failures = 0, 0, {}
+local tests, assertions, skipped, failures = 0, 0, 0, {}
 
 local function eq(expected, actual, message)
 	assertions = assertions + 1
@@ -20,10 +23,14 @@ local function eq(expected, actual, message)
 end
 
 local function test(name, fn)
-	tests = tests + 1
-	local ok, err = xpcall(fn, debug.traceback)
+	local ok, result = xpcall(fn, debug.traceback)
 	if not ok then
-		failures[#failures + 1] = name .. ": " .. err
+		failures[#failures + 1] = name .. ": " .. result
+	elseif result then
+		skipped = skipped + 1
+		print("SKIP " .. name .. ": " .. result)
+	else
+		tests = tests + 1
 	end
 end
 
@@ -329,6 +336,37 @@ test("braced and unbraced scripts", function ()
 	eq({}, values("$x^{12}$", "^"), "unsupported groups retain the script marker")
 end)
 
+test("script mappings do not enter font and accent arguments", function ()
+	for _, script in ipairs({ "_", "^" }) do
+		for _, case in ipairs({
+			{ [[\mathbb{R}]], "ℝ", "R" },
+			{ [[\mathcal{A}]], "𝓐", "A" },
+			{ [[\mathbf{A}]], "𝐀", "A" },
+			{ [[\hat{x}]], "x̂", "x" },
+			{ [[\vec{x}]], "x⃗", "x" },
+		}) do
+			local source = [[\(m]] .. script .. "{" .. case[1] .. [[}\)]]
+			replacement(source, case[1], case[2])
+			eq({}, values(source, case[3]), "command arguments must not receive a second script replacement")
+		end
+		eq({}, values("$m" .. script .. [[{\frac{1}{2}}$]], "1"), "fraction arguments retain their own formatting")
+	end
+end)
+
+test("script mappings follow the nearest script through grouping braces", function ()
+	replacement([[$m_{{i}}$]], "i", "ᵢ")
+	replacement([[$m^{{i}}$]], "i", "ⁱ")
+	replacement([[$m_{a^{i}}$]], "a", "ₐ")
+	replacement([[$m_{a^{i}}$]], "i", "ⁱ")
+	replacement([[$m^{a_{i}}$]], "a", "ᵃ")
+	replacement([[$m^{a_{i}}$]], "i", "ᵢ")
+	replacement([[$m_{a^{+}}$]], "+", "⁺")
+	replacement([[$m^{a_{+}}$]], "+", "₊")
+	replacement([[$\frac{x_{i}}{y}$]], "i", "ᵢ")
+	replacement([[$\frac{x^{i}}{y}$]], "i", "ⁱ")
+	replacement([[$\frac{x_{+}}{y}$]], "+", "₊")
+end)
+
 test("incomplete input and ancestor-free nodes are safe", function ()
 	for _, source in ipairs({ "{a}", "{}", "{", "}", "$x_{", [[\frac{1}]], [[\section{Title}]] }) do
 		captures(source)
@@ -388,8 +426,7 @@ end)
 test("Markdown injected LaTeX", function ()
 	for _, language in ipairs({ "markdown", "markdown_inline" }) do
 		if not pcall(vim.treesitter.language.add, language) then
-			print("SKIP Markdown injection: missing " .. language .. " parser")
-			return
+			return "missing " .. language .. " parser"
 		end
 	end
 	local source = "Inline $\\alpha + x_1$.\n\n$$\\beta$$"
@@ -468,4 +505,4 @@ end)
 if #failures > 0 then
 	error(table.concat(failures, "\n\n"), 0)
 end
-print(("Passed %d tests (%d assertions)"):format(tests, assertions))
+print(("Passed %d tests (%d assertions; %d skipped)"):format(tests, assertions, skipped))
