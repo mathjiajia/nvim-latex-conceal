@@ -176,6 +176,60 @@ test("completed results are reused on an unchanged redraw", function ()
 	eq(count, #query_calls, "unchanged redraws do not evaluate conceal queries")
 end)
 
+test("save-time rewrites retain unchanged conceals while native parsing yields", function ()
+	local lines = { [[$\alpha + x_1$]], [[$\beta + \mathbb{R}$]] }
+	local buf, parser = buffer(lines)
+	local first = draw(original_win, buf)
+	local active = vim.treesitter.highlighter.active[buf]
+	local parse = parser.parse
+	parser.parse = function (self, ...)
+		assert(not active.parsing, "conceal redraws must not interrupt an asynchronous parse")
+		return parse(self, ...)
+	end
+	local count = #query_calls
+	-- A formatter can replace the whole buffer even when its text is unchanged.
+	api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	active.parsing = true
+	eq(first, draw(original_win, buf), "a pending parse must not expose the whole source")
+	eq(first, draw(original_win, buf), "conceals survive every intermediate redraw")
+	eq(count, #query_calls, "pending parses replay completed results without evaluating queries")
+
+	api.nvim_buf_set_text(buf, 0, 1, 0, 7, { [[\gamma]] })
+	local replacements = conceals(draw(original_win, buf))
+	eq(nil, replacements["\\alpha"], "changed rows cannot replay old byte ranges")
+	eq(nil, replacements["\\gamma"], "changed rows wait for the new syntax tree")
+	eq("β", replacements["\\beta"], "unchanged rows remain concealed")
+	eq("ℝ", replacements["\\mathbb{R}"])
+	eq(count, #query_calls)
+
+	active.parsing = false
+	replacements = conceals(draw(original_win, buf))
+	eq("γ", replacements["\\gamma"], "the completed parse refreshes changed rows")
+	eq("β", replacements["\\beta"])
+	eq(true, #query_calls > count)
+end)
+
+test("pending multiline conceals require every source row to match", function ()
+	vim.treesitter.query.set("latex", "conceals", conceal_query .. [[
+		((generic_command
+		  command: (command_name) @_command) @conceal
+		  (#eq? @_command "\\foo")
+		  (#set! conceal "X"))
+	]])
+	local buf = buffer({ [[\foo{]], "alpha", "}", [[$\beta$]] })
+	eq("X", conceals(draw(original_win, buf))["\\foo{\nalpha\n}"])
+	local count = #query_calls
+	local active = vim.treesitter.highlighter.active[buf]
+	active.parsing = true
+	api.nvim_buf_set_lines(buf, 1, 2, false, { "gamma" })
+	local replacements = conceals(draw(original_win, buf))
+	eq(nil, replacements["\\foo{\ngamma\n}"], "a changed interior row invalidates the entire mark")
+	eq("β", replacements["\\beta"], "other conceals remain visible")
+	eq(count, #query_calls)
+	active.parsing = false
+	eq("X", conceals(draw(original_win, buf))["\\foo{\ngamma\n}"])
+end)
+
 test("same-shape command edits invalidate completed results", function ()
 	local buf = buffer([[$\alpha$]])
 	eq("α", conceals(draw(original_win, buf))["\\alpha"])
@@ -436,6 +490,13 @@ test("folded viewports query visible rows and discard results when their span ch
 	repaint(0)
 	repaint(900)
 	eq(2, #query_calls, "the same folded viewport reuses both rows")
+	local active = vim.treesitter.highlighter.active[buf]
+	active.parsing = true
+	eq(true, provider.on_win(nil, original_win, buf, 0, 900))
+	eq("α", conceals(repaint(0))["\\alpha"])
+	eq("α", conceals(repaint(900))["\\alpha"], "distant visible rows retain their own source snapshots")
+	eq(2, #query_calls, "pending parses also preserve sparse results")
+	active.parsing = false
 
 	eq(true, provider.on_win(nil, original_win, buf, 0, 800))
 	eq(2, #query_calls, "moving a folded viewport still defers query evaluation")

@@ -160,6 +160,9 @@ end
 
 local function collect(buf, cached, first, last)
 	local rows = {}
+	for i, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
+		cached.lines[first + i - 1] = line
+	end
 	local query = cached.query
 	local names = query.captures
 	local line_count = cached.line_count
@@ -241,16 +244,61 @@ local function apply_changes(cached, state)
 	cached.version = state.version
 end
 
+-- Native highlighting keeps its previous trees while an asynchronous parse
+-- yields. Keep completed conceals too, but only where their source still
+-- matches: save-time formatting may have changed or moved some of the rows.
+local function pending_rows(buf, cached)
+	local unchanged, valid, rows = {}, {}, {}
+	if cached.sparse then
+		-- Folded viewports can span thousands of hidden rows. Read only the
+		-- source rows collected when Neovim actually painted them.
+		for row, line in pairs(cached.lines) do
+			unchanged[row] = api.nvim_buf_get_lines(buf, row, row + 1, false)[1] == line
+		end
+	else
+		for i, line in ipairs(api.nvim_buf_get_lines(buf, cached.first, cached.last, false)) do
+			local row = cached.first + i - 1
+			unchanged[row] = line == cached.lines[row]
+		end
+	end
+	for row, marks in pairs(cached.rows) do
+		for _, mark in ipairs(marks) do
+			if valid[mark] == nil then
+				local last = mark[3].end_row - (mark[3].end_col == 0 and 1 or 0)
+				local same = true
+				for line = mark[1], last do
+					if not unchanged[line] then
+						same = false
+						break
+					end
+				end
+				valid[mark] = same
+			end
+			if valid[mark] then
+				rows[row] = rows[row] or {}
+				rows[row][#rows[row] + 1] = mark
+			end
+		end
+	end
+	return rows
+end
+
 local function on_win(_, win, buf, top, bottom)
 	local active = highlighter.active[buf]
 	if not active then
 		windows[win] = nil
 		return false
 	end
-	-- Keep the cache while native highlighting still parses an edit, so the
-	-- redraw that follows refills only the rows it repaints.
+	local cached = windows[win]
 	if active.parsing then
+		if cached and cached.buf == buf and cached.parser == active.tree then
+			cached.pending = pending_rows(buf, cached)
+			return true
+		end
 		return false
+	end
+	if cached then
+		cached.pending = nil
 	end
 	local parser = active.tree
 	local state = parser_state(parser)
@@ -268,7 +316,6 @@ local function on_win(_, win, buf, top, bottom)
 	local tick = api.nvim_buf_get_changedtick(buf)
 	-- Replaced trees arrive through the parser callbacks, so only an invalidated
 	-- root (a buffer reload) can leave results stale without changing the version.
-	local cached = windows[win]
 	if cached and cached.buf == buf and cached.parser == parser and cached.tick == tick and cached.query == query
 		and cached.default_priority == vim.hl.priorities.treesitter
 		and cached.version >= state.reset and cached.first <= top and cached.last >= last
@@ -323,6 +370,7 @@ local function on_win(_, win, buf, top, bottom)
 		first = first,
 		last = last,
 		line_count = line_count,
+		lines = {},
 		trees = latex_trees(state.index, first, last),
 		priorities = tree_priorities(state.index, top, bottom),
 		priorities_version = state.version,
@@ -348,7 +396,7 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 	end
 	local first = math.max(first_row, cached.first)
 	local last = math.min(last_row + (last_col > 0 and 1 or 0), cached.last)
-	local ready = cached.ready
+	local ready = not cached.pending and cached.ready
 	if ready then
 		local row = first
 		while row < last do
@@ -368,7 +416,7 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 		end
 	end
 	serial = serial + 1
-	local rows, priorities = cached.rows, cached.priorities
+	local rows, priorities = cached.pending or cached.rows, cached.priorities
 	for row = first, last - 1 do
 		local marks = rows[row]
 		if marks then

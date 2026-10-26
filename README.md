@@ -69,7 +69,8 @@ redraws. Edits invalidate those results so the next redraw uses the current
 syntax tree; when the parser rebuilds an injected tree without an edit, only the
 rows that tree covers are evaluated again. Parsed trees are indexed once per
 parser version, and change history is bounded; windows with older cached results
-rebuild when needed.
+rebuild when needed. While native parsing runs asynchronously, unchanged rows
+keep their cached conceals; changed rows refresh when parsing completes.
 Glyph appearance depends on your terminal and font.
 
 The supplementary symbol table and font coverage were compared with
