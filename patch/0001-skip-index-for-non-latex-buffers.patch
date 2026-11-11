@@ -1,0 +1,43 @@
+diff --git a/lua/latex-conceal/render.lua b/lua/latex-conceal/render.lua
+index 4a913dd..546af39 100644
+--- a/lua/latex-conceal/render.lua
++++ b/lua/latex-conceal/render.lua
+@@ -20,7 +20,7 @@ local initialized = false
+ local function parser_state(parser)
+ 	local state = parsers[parser]
+ 	if not state then
+-		state = { version = 0, reset = 0, changes = {}, index = {}, index_version = -1, has_latex = false }
++		state = { version = 0, reset = 0, changes = {}, index = {}, index_version = -1 }
+ 		local function changed(ranges, tree)
+ 			local version = state.version + 1
+ 			state.version = version
+@@ -114,7 +114,6 @@ local function build_index(state, active)
+ 		}
+ 	end)
+ 	state.index, state.index_version = index, state.version
+-	state.has_latex = has_latex(active.tree)
+ end
+ 
+ local function tree_priorities(index, top, bottom)
+@@ -356,15 +355,16 @@ local function on_win(_, win, buf, top, bottom)
+ 		cached.pending, cached.pending_tick = nil, nil
+ 	end
+ 	local parser = active.tree
+-	local state = parser_state(parser)
+-	if state.index_version ~= state.version then
+-		build_index(state, active)
+-	end
+-	local query = state.has_latex and ts.query.get("latex", "conceals")
++	-- Other highlighted buffers need neither parser callbacks nor a tree index.
++	local query = has_latex(parser) and ts.query.get("latex", "conceals")
+ 	if not query then
+ 		windows[win] = nil
+ 		return false
+ 	end
++	local state = parser_state(parser)
++	if state.index_version ~= state.version then
++		build_index(state, active)
++	end
+ 	local line_count = api.nvim_buf_line_count(buf)
+ 	local last = math.min(line_count, bottom + 1)
+ 	local sparse = last - top > api.nvim_win_get_height(win) + 1

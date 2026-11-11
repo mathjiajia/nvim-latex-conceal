@@ -179,10 +179,11 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 		local replacement = hidden_commands[text]
 		if replacement == nil then
 			local math_symbol, text_symbol = math_symbols[text], symbols.text[text]
-			if (math_symbol ~= nil or text_symbol ~= nil) and not node:__has_ancestor(label_ancestors) then
+			if math_symbol ~= nil or text_symbol ~= nil then
+				-- Text ancestors include labels, so only a text replacement needs the label walk.
 				if in_math(node) then
 					replacement = math_symbol
-				else
+				elseif text_symbol ~= nil and not node:__has_ancestor(label_ancestors) then
 					replacement = text_symbol
 				end
 			end

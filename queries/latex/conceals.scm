@@ -10,14 +10,15 @@
   command: (command_name) @conceal
   (#latex-symbol! @conceal))
 
-; One match per group checks the grandparent once for both braces.
-(curly_group
+; One match per group checks the group's parent once for both braces. The
+; conceal is set on the brace capture only, so the group itself stays visible.
+((curly_group
   "{" @conceal
-  "}" @conceal
-  (#not-has-grandparent? @conceal
+  "}" @conceal) @_group
+  (#not-has-parent? @_group
     title_declaration author_declaration chapter part section subsection subsubsection paragraph
     subparagraph generic_command)
-  (#set! conceal ""))
+  (#set! @conceal conceal ""))
 
 (math_delimiter
   [

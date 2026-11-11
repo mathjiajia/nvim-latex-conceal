@@ -11,6 +11,7 @@ local parsers = setmetatable({}, { __mode = "k" })
 local highlights = {}
 local serial = 0
 local initialized = false
+local conceallevel_opts = { win = 0 }
 
 -- Each parser keeps a version counter and the row ranges that changed since
 -- any window last looked. Neovim reports every replaced or dropped tree
@@ -20,7 +21,7 @@ local initialized = false
 local function parser_state(parser)
 	local state = parsers[parser]
 	if not state then
-		state = { version = 0, reset = 0, changes = {}, index = {}, index_version = -1, has_latex = false }
+		state = { version = 0, reset = 0, changes = {}, index = {}, index_version = -1 }
 		local function changed(ranges, tree)
 			local version = state.version + 1
 			state.version = version
@@ -114,7 +115,6 @@ local function build_index(state, active)
 		}
 	end)
 	state.index, state.index_version = index, state.version
-	state.has_latex = has_latex(active.tree)
 end
 
 local function tree_priorities(index, top, bottom)
@@ -340,6 +340,12 @@ local function on_win(_, win, buf, top, bottom)
 		windows[win] = nil
 		return false
 	end
+	-- Nothing is concealed at level 0, so skip the query and the replay entirely.
+	conceallevel_opts.win = win
+	if api.nvim_get_option_value("conceallevel", conceallevel_opts) == 0 then
+		windows[win] = nil
+		return false
+	end
 	local cached = windows[win]
 	if active.parsing then
 		if cached and cached.buf == buf and cached.parser == active.tree then
@@ -356,14 +362,15 @@ local function on_win(_, win, buf, top, bottom)
 		cached.pending, cached.pending_tick = nil, nil
 	end
 	local parser = active.tree
-	local state = parser_state(parser)
-	if state.index_version ~= state.version then
-		build_index(state, active)
-	end
-	local query = state.has_latex and ts.query.get("latex", "conceals")
+	-- Other highlighted buffers need neither parser callbacks nor a tree index.
+	local query = has_latex(parser) and ts.query.get("latex", "conceals")
 	if not query then
 		windows[win] = nil
 		return false
+	end
+	local state = parser_state(parser)
+	if state.index_version ~= state.version then
+		build_index(state, active)
 	end
 	local line_count = api.nvim_buf_line_count(buf)
 	local last = math.min(line_count, bottom + 1)
