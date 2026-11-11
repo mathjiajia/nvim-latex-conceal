@@ -4,7 +4,7 @@ Tree-sitter conceals for LaTeX, including LaTeX injected into Markdown.
 
 ## Requirements
 
-- Neovim 0.13 or later.
+- Latest Neovim nightly.
 - A `latex` parser and highlighting queries, provided by
   [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter).
 - For Markdown, also install `markdown` and `markdown_inline`.
@@ -72,12 +72,14 @@ restore conceals with `:setlocal conceallevel=2`.
 Conceals change only the display, never the buffer contents.
 The plugin evaluates its separate `conceals` query for visible LaTeX, caches the
 completed results per window, and replays them as conceal extmarks on unchanged
-redraws. Edits invalidate those results so the next redraw uses the current
+redraws. Small scrolls reuse the completed overlap and query only newly exposed
+rows. Edits invalidate those results so the next redraw uses the current
 syntax tree; when the parser rebuilds an injected tree without an edit, only the
 rows that tree covers are evaluated again. Parsed trees are indexed once per
 parser version, and change history is bounded; windows with older cached results
 rebuild when needed. While native parsing runs asynchronously, unchanged rows
 keep their cached conceals; changed rows refresh when parsing completes.
+Repeated redraws during the same pending parse reuse their source comparison.
 Glyph appearance depends on your terminal and font.
 
 The supplementary symbol table and font coverage were compared with
@@ -119,6 +121,8 @@ and predicates for custom patterns:
   `bar`, or `overline` replacements.
 - `(#latex-delimiters! @command @close)` and `(#set-pairs! @capture key ...)`.
 - `(#has-grandparent? @capture type ...)` and `(#latex-script? @capture kind)`.
+- `(#latex-math? @capture)` accepts math outside text commands and labels, using
+  nightly's native Tree-sitter ancestor checks.
 
 ## Acknowledgement
 

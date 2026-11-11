@@ -4,7 +4,19 @@ end
 vim.g.loaded_latex_conceal = true
 
 local ts = vim.treesitter
-local get_node_text = ts.get_node_text
+local get_text = vim.api.nvim_buf_get_text
+
+-- Directives read raw node text. The common single-line buffer case does not
+-- need the general helper's metadata and byte-range tables.
+local function get_node_text(node, source)
+	if type(source) == "number" then
+		local sr, sc, er, ec = node:range()
+		if sr == er then
+			return get_text(source, sr, sc, er, ec, {})[1]
+		end
+	end
+	return ts.get_node_text(node, source)
+end
 
 -- Query arguments are immutable, so tables derived from them are cached by
 -- argument list. Weak keys release the caches when queries are reloaded.
@@ -124,7 +136,16 @@ ts.query.add_predicate("has-grandparent?", has_grandparent, { force = true })
 ts.query.add_predicate("latex-script?", in_script, { force = true })
 ts.query.add_directive("set-pairs!", set_pairs, { force = true })
 
-local math_nodes = { math_environment = true, inline_formula = true, displayed_equation = true }
+-- Nightly's native ancestor matcher uses the same arguments as #has-ancestor?.
+local math_ancestors = { "has-ancestor?", 0, "math_environment", "inline_formula", "displayed_equation" }
+local text_ancestors = { "has-ancestor?", 0, "text_mode", "label_definition" }
+local label_ancestors = { "has-ancestor?", 0, "label_definition" }
+
+---@param node TSNode
+---@return boolean
+local function in_math(node)
+	return node:__has_ancestor(math_ancestors) and not node:__has_ancestor(text_ancestors)
+end
 
 -- Replacement tables load on first use, when a query needs them.
 local symbols, math_symbols, exact, fonts, scripts
@@ -158,27 +179,11 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 		local replacement = hidden_commands[text]
 		if replacement == nil then
 			local math_symbol, text_symbol = math_symbols[text], symbols.text[text]
-			if math_symbol ~= nil or text_symbol ~= nil then
-				local in_math, in_text, labelled = false, false, false
-				local parent = node:parent()
-				while parent do
-					local kind = parent:type()
-					if kind == "label_definition" then
-						labelled = true
-						break
-					elseif kind == "text_mode" then
-						in_text = true
-					elseif math_nodes[kind] then
-						in_math = true
-					end
-					parent = parent:parent()
-				end
-				if not labelled then
-					if in_math and not in_text then
-						replacement = math_symbol
-					else
-						replacement = text_symbol
-					end
+			if (math_symbol ~= nil or text_symbol ~= nil) and not node:__has_ancestor(label_ancestors) then
+				if in_math(node) then
+					replacement = math_symbol
+				else
+					replacement = text_symbol
 				end
 			end
 		end
@@ -207,22 +212,19 @@ ts.query.add_directive("latex-conceal!", function (match, _, source, pred, metad
 end, { force = true }
 )
 
--- Math context for font alphabets: inside math and outside labels and text.
----@param node TSNode
----@return boolean
-local function in_math(node)
-	local found = false
-	local parent = node:parent()
-	while parent do
-		local kind = parent:type()
-		if kind == "label_definition" or kind == "text_mode" then
-			return false
+-- Share one predicate dispatch for math context and its text/label exclusions.
+ts.query.add_predicate("latex-math?", function (match, _, _, pred)
+	local nodes = match[pred[2]]
+	if nodes then
+		for _, node in ipairs(nodes) do
+			if in_math(node) then
+				return true
+			end
 		end
-		found = found or math_nodes[kind] == true
-		parent = parent:parent()
 	end
-	return found
-end
+	return false
+end, { force = true }
+)
 
 -- Every supported whole-command replacement is short; longer arguments such
 -- as \text{...} skip text extraction entirely.

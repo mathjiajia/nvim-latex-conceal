@@ -100,9 +100,18 @@ local function build_index(state, active)
 			counted = active:get_query(lang):query() ~= nil
 			has_query[lang] = counted
 		end
-		local first, _, last = tree:root():range()
+		local root = tree:root()
+		local first, _, last = root:range()
 		n = n + 1
-		index[n] = { first = first, last = last, tree = tree, latex = lang == "latex", counted = counted }
+		index[n] = {
+			first = first,
+			last = last,
+			tree = tree,
+			root = root,
+			latex = lang == "latex",
+			counted = counted,
+			included = lang == "latex" and tree:included_ranges(true) or nil
+		}
 	end)
 	state.index, state.index_version = index, state.version
 	state.has_latex = has_latex(active.tree)
@@ -125,15 +134,8 @@ local function latex_trees(index, first, last)
 	for i = 1, #index do
 		local entry = index[i]
 		if entry.latex and entry.first < last and entry.last >= first then
-			local tree = entry.tree
 			n = n + 1
-			trees[n] = {
-				tree = tree,
-				root = tree:root(),
-				first = entry.first,
-				last = entry.last,
-				included = tree:included_ranges(true)
-			}
+			trees[n] = entry
 		end
 	end
 	return trees
@@ -170,6 +172,7 @@ local function collect(buf, cached, first, last)
 	for _, entry in ipairs(cached.trees) do
 		if entry.first < last and entry.last >= first then
 			local included = entry.included
+			local contiguous = #included == 1
 			local tree = entry.tree
 			for id, node, metadata in query:iter_captures(entry.root, buf, first, last) do
 				local capture = metadata[id]
@@ -180,10 +183,19 @@ local function collect(buf, cached, first, last)
 				local hl_group = highlight(names[id])
 				if conceal ~= nil or hl_group ~= 0 then
 					local priority = tonumber(metadata.priority or capture and capture.priority) or default_priority
-					local range = ts.get_range(node, buf, capture)
-					for _, region in ipairs(included) do
-						local sr, sc, er, ec = intersection(range, region)
-						if sr and er + (ec > 0 and 1 or 0) <= line_count then
+					local range, sr, sc, er, ec
+					if contiguous and not (capture and (capture.range or capture.offset)) then
+						-- Unmodified nodes already lie inside a contiguous tree. Avoid
+						-- allocating byte ranges just to intersect them with that tree.
+						sr, sc, er, ec = node:range()
+					else
+						range = ts.get_range(node, buf, capture)
+					end
+					for i = 1, range and #included or 1 do
+						if range then
+							sr, sc, er, ec = intersection(range, included[i])
+						end
+						if sr and (er > sr or ec > sc) and er + (ec > 0 and 1 or 0) <= line_count then
 							local mark = {
 								sr,
 								sc,
@@ -209,6 +221,45 @@ local function collect(buf, cached, first, last)
 					end
 				end
 			end
+		end
+	end
+	return rows
+end
+
+-- Keep whole captures together when a cache boundary cuts through a multiline
+-- mark. Recollecting that viewport avoids replaying the same capture twice.
+local function crosses_boundary(marks, boundary)
+	if not marks then
+		return false
+	end
+	for _, mark in ipairs(marks) do
+		local last = mark[3].end_row - (mark[3].end_col == 0 and 1 or 0)
+		if mark[1] < boundary and last >= boundary then
+			return true
+		end
+	end
+	return false
+end
+
+-- A small scroll keeps the completed overlap and queries only the missing
+-- strips. The new viewport replaces the old one so the cache stays bounded.
+local function collect_viewport(buf, cached, previous)
+	local first, last = cached.first, cached.last
+	if not previous then
+		return collect(buf, cached, first, last)
+	end
+	local low, high = math.max(first, previous.first), math.min(last, previous.last)
+	if crosses_boundary(previous.rows[low], low) or crosses_boundary(previous.rows[high - 1], high) then
+		return collect(buf, cached, first, last)
+	end
+	local rows = first < low and collect(buf, cached, first, low) or {}
+	for row = low, high - 1 do
+		rows[row] = previous.rows[row]
+		cached.lines[row] = previous.lines[row]
+	end
+	if high < last then
+		for row, marks in pairs(collect(buf, cached, high, last)) do
+			rows[row] = marks
 		end
 	end
 	return rows
@@ -292,13 +343,17 @@ local function on_win(_, win, buf, top, bottom)
 	local cached = windows[win]
 	if active.parsing then
 		if cached and cached.buf == buf and cached.parser == active.tree then
-			cached.pending = pending_rows(buf, cached)
+			local tick = api.nvim_buf_get_changedtick(buf)
+			if cached.pending_tick ~= tick then
+				cached.pending = cached.tick == tick and cached.rows or pending_rows(buf, cached)
+				cached.pending_tick = tick
+			end
 			return true
 		end
 		return false
 	end
 	if cached then
-		cached.pending = nil
+		cached.pending, cached.pending_tick = nil, nil
 	end
 	local parser = active.tree
 	local state = parser_state(parser)
@@ -316,10 +371,11 @@ local function on_win(_, win, buf, top, bottom)
 	local tick = api.nvim_buf_get_changedtick(buf)
 	-- Replaced trees arrive through the parser callbacks, so only an invalidated
 	-- root (a buffer reload) can leave results stale without changing the version.
-	if cached and cached.buf == buf and cached.parser == parser and cached.tick == tick and cached.query == query
+	local reusable = cached and cached.buf == buf and cached.parser == parser and cached.tick == tick and cached.query == query
 		and cached.default_priority == vim.hl.priorities.treesitter
-		and cached.version >= state.reset and cached.first <= top and cached.last >= last
-		and (not cached.sparse or cached.view_first == top and cached.view_last == last) and parser:is_valid(true) then
+		and cached.version >= state.reset and parser:is_valid(true)
+	if reusable and cached.first <= top and cached.last >= last
+		and (not cached.sparse or cached.view_first == top and cached.view_last == last) then
 		if cached.version ~= state.version then
 			apply_changes(cached, state)
 			if #state.changes > change_limit / 2 then
@@ -359,6 +415,15 @@ local function on_win(_, win, buf, top, bottom)
 	if state.index_version ~= state.version then
 		build_index(state, active)
 	end
+	local previous
+	if reusable and nearby and not sparse and not cached.sparse and cached.version >= state.reset then
+		if cached.version ~= state.version then
+			apply_changes(cached, state)
+		end
+		if not cached.ready then
+			previous = cached
+		end
+	end
 	local next_cache = {
 		buf = buf,
 		parser = parser,
@@ -381,7 +446,7 @@ local function on_win(_, win, buf, top, bottom)
 		view_first = top,
 		view_last = view_last
 	}
-	next_cache.rows = deferred and {} or collect(buf, next_cache, first, last)
+	next_cache.rows = deferred and {} or collect_viewport(buf, next_cache, previous)
 	windows[win] = next_cache
 	if #state.changes > change_limit / 2 then
 		trim_changes(state, tick)
@@ -431,6 +496,13 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 			end
 		end
 	end
+	-- All columns of each collected row have already been emitted. Skip the
+	-- remainder of wrapped rows and any completed empty rows in this redraw.
+	local next_row = last
+	while next_row < cached.last and not rows[next_row] and (not ready or ready[next_row]) do
+		next_row = next_row + 1
+	end
+	return math.max(next_row, last_row + (last_col > 0 and 1 or 0))
 end
 
 function M.setup()

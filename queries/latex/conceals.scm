@@ -74,8 +74,7 @@
       ])
   ] @conceal
   (#latex-script-supported? @conceal)
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal text_mode label_definition)
+  (#latex-math? @conceal)
   (#latex-script! @conceal))
 
 ; Braced scripts: a single word or operator inside a group follows the nearest
@@ -87,8 +86,7 @@
       (operator)
     ] @conceal)
   (#latex-script-supported? @conceal)
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
+  (#latex-math? @conceal)
   (#latex-script! @conceal))
 
 ; The parser represents these grouped operators as anonymous tokens.
@@ -109,8 +107,7 @@
       ] @conceal))
 ]
   (#latex-script-supported? @conceal)
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
+  (#latex-math? @conceal)
   (#latex-script! @conceal))
 
 ; Hide the script marker only when the whole braced value is supported.
@@ -123,8 +120,7 @@
     superscript: (curly_group))
 ] @_script
   (#latex-script-marker? @_script)
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
+  (#latex-math? @conceal)
   (#set! @conceal conceal ""))
 
 ; Fractions display as (numerator⧸ denominator).
@@ -141,8 +137,7 @@
     "}" @conceal.close2)
   .)
   (#any-of? @conceal.command "\\frac" "\\dfrac" "\\tfrac" "\\cfrac")
-  (#has-ancestor? @conceal.command math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal.command label_definition text_mode)
+  (#latex-math? @conceal.command)
   (#set! priority 101)
   (#set! @conceal.command conceal "(")
   (#set! @conceal.open1 conceal "")
@@ -156,8 +151,7 @@
     left_delimiter: _ @conceal
     right_delimiter: _ @conceal
   ]
-  (#has-ancestor? @conceal math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal label_definition text_mode)
+  (#latex-math? @conceal)
   (#set-pairs! @conceal conceal
     "." "" "\\{" "{" "\\}" "}" "\\|" "‖"
     "\\langle" "⟨" "\\rangle" "⟩" "\\lceil" "⌈" "\\rceil" "⌉"
@@ -176,8 +170,7 @@
     "}" @conceal.close)
   .)
   (#any-of? @conceal.command "\\bra" "\\ket" "\\abs" "\\norm")
-  (#has-ancestor? @conceal.command math_environment inline_formula displayed_equation)
-  (#not-has-ancestor? @conceal.command label_definition text_mode)
+  (#latex-math? @conceal.command)
   (#set! priority 101)
   (#latex-delimiters! @conceal.command @conceal.close)
   (#set! @conceal.open conceal ""))
