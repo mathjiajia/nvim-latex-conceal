@@ -27,19 +27,26 @@ Tree-sitter conceals for LaTeX, including LaTeX injected into Markdown.
 Install the parsers with `:TSInstall latex markdown markdown_inline`.
 Run `:TSUpdate` after updating nvim-treesitter to keep parsers and queries compatible.
 
+To make new or otherwise ambiguous `.tex` files use the `tex` filetype, set this
+in your `init.lua` before opening files:
+
+```lua
+vim.g.tex_flavor = "latex"
+```
+
 If your configuration does not already enable Tree-sitter highlighting, add:
 
 ```lua
 vim.api.nvim_create_autocmd("FileType", {
   group = vim.api.nvim_create_augroup("latex_conceal_highlighting", { clear = true }),
-  pattern = { "tex", "plaintex", "markdown" },
+  pattern = { "tex", "markdown" },
   callback = function()
     vim.treesitter.start()
   end,
 })
 ```
 
-The plugin sets `conceallevel=2` for `tex` and `plaintex` windows.
+The plugin sets `conceallevel=2` for `tex` windows.
 For Markdown, set `vim.wo.conceallevel = 2` in your Markdown ftplugin or configuration.
 The `concealcursor` option controls whether text is concealed on the cursor line.
 
@@ -112,42 +119,6 @@ and predicates for custom patterns:
   `bar`, or `overline` replacements.
 - `(#latex-delimiters! @command @close)` and `(#set-pairs! @capture key ...)`.
 - `(#has-grandparent? @capture type ...)` and `(#latex-script? @capture kind)`.
-
-With the parsers and queries on Neovim's runtime path, run:
-
-```sh
-nvim --headless -u NONE -i NONE -l tests/conceal.lua
-nvim --headless -u NONE -i NONE -l tests/render.lua
-```
-
-To test a separate nvim-treesitter `main` checkout, set `NVIM_TREESITTER` to its path;
-the tests use its `runtime/` directory.
-
-### Benchmarks
-
-Run the TeX editor benchmark with Python 3 on macOS or Linux:
-
-```sh
-python3 tests/benchmark.py
-python3 tests/benchmark.py --baseline ../nvim-latex-conceal-before --output /tmp/latex-conceal-benchmark.json
-```
-
-The runner starts fresh Neovim processes in a 120×40 terminal and measures first
-render, cached full redraw, cursor movement, one-line scrolling, distant jumps,
-text edits, and formula edits. Each operation includes native Tree-sitter parsing
-and highlighting through the completed redraw. These are editor timings, not
-isolated plugin callback costs.
-
-Defaults are 10,000 TeX lines, four runs, and 40 samples per operation after ten
-warmups. Results are the median of the run medians, in milliseconds. Use `--lines`,
-`--runs`, `--steps`, and `--warmup` to change those settings, or `--nvim` to select
-the Neovim executable. `NVIM_TREESITTER` also applies to the benchmark.
-
-`--baseline` compares another plugin checkout using the same fixture and runtime,
-alternating which version runs first. `--output` saves the measurements and
-runtime details as JSON; temporary logs and intermediate results are cleaned up.
-Run comparisons while other workloads are idle. Timings are reported without
-fixed pass/fail thresholds because they depend on the machine and runtime.
 
 ## Acknowledgement
 

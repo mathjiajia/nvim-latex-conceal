@@ -6,12 +6,6 @@ vim.g.loaded_latex_conceal = true
 local ts = vim.treesitter
 local get_node_text = ts.get_node_text
 
-for _, filetype in ipairs({ "tex", "plaintex" }) do
-	if ts.language.get_lang(filetype) == filetype then
-		ts.language.register("latex", filetype)
-	end
-end
-
 -- Query arguments are immutable, so tables derived from them are cached by
 -- argument list. Weak keys release the caches when queries are reloaded.
 local pred_cache = setmetatable({}, { __mode = "k" })
