@@ -125,8 +125,26 @@ Every candidate match of a pattern costs a round trip into Lua, so the shipped
 patterns are shaped to reject nodes inside the C query cursor first: braced
 words are matched through their enclosing `curly_group`, unbraced scripts
 through the grammar's `letter` and `command_name` arguments, and one pattern
-covers all whole-command replacements. The plugin registers these directives
-and predicates for custom patterns:
+covers all whole-command replacements.
+
+Compiling the query has a cost of its own: Tree-sitter analyses each pattern in
+which a child must be found among arbitrary siblings, such as the `}` that
+closes a group or the `$` that closes a formula. The shipped patterns capture
+the group or formula twice instead and let `#latex-ends!` narrow the two
+captures to its end tokens. The closing one is named `@conceal.close`; its
+highlight `@conceal.close.latex` links to `@conceal.latex` by default.
+
+Asking Tree-sitter for a node's ancestors walks down from the root of the tree.
+The captures `@_math`, `@_text` and `@_label` mark formulas and math
+environments, text commands, and labels. The query yields captures in document
+order, so the renderer records these regions as it reads the results, and
+`#latex-math?` and `#latex-symbol!` place a node from the regions around it.
+A custom query that defines all three captures gets the same treatment; any
+other use of these predicates asks Tree-sitter. The regions known to a match
+are those that begin no later than its first capture, so a pattern should not
+test a node inside a formula that begins after one of its own earlier captures.
+
+The plugin registers these directives and predicates for custom patterns:
 
 - `(#latex-symbol! @capture)` replaces a symbol command in math or text context.
 - `(#latex-argument! @capture)` replaces a whole command with a braced argument.
@@ -140,9 +158,14 @@ and predicates for custom patterns:
   `bar`, or `overline` replacements.
 - `(#latex-delimiters! @command @close @open)`, where `@open` is optional, and
   `(#set-pairs! @capture key ...)`.
+- `(#latex-ends! @open @close)` narrows two captures of one group or formula to
+  its opening and closing brace or delimiter. A capture whose token is missing
+  covers nothing.
 - `(#has-grandparent? @capture type ...)` and `(#latex-script? @capture kind)`.
-- `(#latex-math? @capture)` accepts math outside text commands and labels, using
-  nightly's native Tree-sitter ancestor checks.
+- `(#latex-parent? @capture type ...)` and `(#latex-command? @capture name ...)`
+  behave like `#has-parent?` and `#any-of?`, with their arguments cached as a set.
+- `(#latex-math? @capture)` accepts math outside text commands and labels, from
+  the recorded regions or nightly's native Tree-sitter ancestor checks.
 
 Neovim conceals a range with at most one character, so a longer `conceal` value
 on a single-line capture is spread over the source characters. Characters

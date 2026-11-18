@@ -1,5 +1,6 @@
 local api = vim.api
 local ts = vim.treesitter
+local context = require("latex-conceal.context")
 -- Register after native highlighting so equal-priority capture colors keep their order.
 local highlighter = ts.highlighter
 local namespace = api.nvim_create_namespace("latex-conceal")
@@ -11,11 +12,12 @@ local margin = 20
 local change_limit = 256
 local windows = {}
 local parsers = setmetatable({}, { __mode = "k" })
-local highlights = {}
+local queries = setmetatable({}, { __mode = "k" })
 local graphemes = {}
 local anchored = {}
 local serial = 0
 local initialized = false
+local following = false
 local conceallevel_opts = { win = 0 }
 local concealcursor_opts = { win = 0 }
 local math_kinds = { inline_formula = true, displayed_equation = true, math_environment = true }
@@ -149,13 +151,22 @@ local function latex_trees(index, first, last)
 	return trees
 end
 
-local function highlight(name)
-	local id = highlights[name]
-	if id == nil then
-		id = name:sub(1, 1) == "_" and 0 or api.nvim_get_hl_id_by_name("@" .. name .. ".latex")
-		highlights[name] = id
+-- Per query: each capture's highlight, and which captures describe the
+-- regions around other nodes instead of decorating text. A custom query
+-- without all three kinds leaves that placement to Tree-sitter.
+local function capture_info(query)
+	local info = queries[query]
+	if not info then
+		local groups, regions, kinds = {}, {}, 0
+		for id, name in ipairs(query.captures) do
+			groups[id] = name:sub(1, 1) == "_" and 0 or api.nvim_get_hl_id_by_name("@" .. name .. ".latex")
+			regions[id] = context.captures[name]
+			kinds = kinds + (regions[id] and 1 or 0)
+		end
+		info = { groups = groups, regions = kinds == 3 and regions or {}, placed = kinds == 3 }
+		queries[query] = info
 	end
-	return id
+	return info
 end
 
 -- Both ranges contain byte offsets, including when a directive changes the range.
@@ -213,45 +224,46 @@ end
 -- surplus source is hidden and surplus replacement follows as inline text.
 -- Returns true when the replacement overflows its source.
 local function spread(rows, first, last, line, row, sc, ec, parts, hl_group, priority, tree)
-	local source = line:sub(sc + 1, ec)
-	local starts = vim.str_utf_pos(source)
-	local n, m = #starts, #parts
-	local function char(i)
-		return source:sub(starts[i], (starts[i + 1] or #source + 1) - 1)
+	-- Source characters as byte columns of the line, with the end as a sentinel.
+	local columns = vim.str_utf_pos(line:sub(sc + 1, ec))
+	local n, m = #columns, #parts
+	for i = 1, n do
+		columns[i] = sc + columns[i] - 1
 	end
-	local function column(i)
-		return i > n and ec or sc + starts[i] - 1
-	end
+	columns[n + 1] = ec
 	local head, tail = 0, 0
-	while head < n and head < m and char(head + 1) == parts[head + 1] do
+	while head < n and head < m and line:sub(columns[head + 1] + 1, columns[head + 2]) == parts[head + 1] do
 		head = head + 1
 	end
-	while tail < n - head and tail < m - head and char(n - tail) == parts[m - tail] do
+	while tail < n - head and tail < m - head and line:sub(columns[n - tail] + 1, columns[n - tail + 1]) == parts[m - tail] do
 		tail = tail + 1
 	end
 	local span = { sc, ec }
-	local function piece(i, j, conceal)
-		add(rows, first, last, {
-			row,
-			column(i),
-			{ end_row = row, end_col = column(j), conceal = conceal, hl_group = hl_group, priority = priority, ephemeral = true },
-			tree,
-			row,
-			span = span
-		})
-	end
 	local paired = math.min(n, m) - tail
-	for i = head + 1, paired do
-		if char(i) ~= parts[i] then
-			piece(i, i + 1, parts[i])
+	-- Source characters [i, j) show one replacement character each; those the
+	-- replacement has no character for are hidden together.
+	local i = head + 1
+	while i <= n - tail do
+		local j, conceal = i + 1, parts[i]
+		if i > paired then
+			j, conceal = n - tail + 1, ""
 		end
+		if line:sub(columns[i] + 1, columns[j]) ~= conceal then
+			add(rows, first, last, {
+				row,
+				columns[i],
+				{ end_row = row, end_col = columns[j], conceal = conceal, hl_group = hl_group, priority = priority, ephemeral = true },
+				tree,
+				row,
+				span = span
+			})
+		end
+		i = j
 	end
-	if paired < n - tail then
-		piece(paired + 1, n - tail + 1, "")
-	elseif paired < m - tail then
+	if paired >= n - tail and paired < m - tail then
 		add(rows, first, last, {
 			row,
-			column(n - tail + 1),
+			columns[n - tail + 1],
 			{
 				virt_text = { { table.concat(parts, "", paired + 1, m - tail), hl_group ~= 0 and hl_group or "Conceal" } },
 				virt_text_pos = "inline",
@@ -268,13 +280,12 @@ local function spread(rows, first, last, line, row, sc, ec, parts, hl_group, pri
 	return false
 end
 
-local function collect(buf, cached, first, last)
-	local rows = {}
-	for i, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
-		cached.lines[first + i - 1] = line
-	end
+-- Evaluate the query over rows [first, last) of every tree into `rows`.
+-- Returns true when a replacement overflows its source.
+local function scan(buf, cached, first, last, rows)
 	local query = cached.query
-	local names = query.captures
+	local info = capture_info(query)
+	local groups, regions, placed = info.groups, info.regions, info.placed
 	local line_count = cached.line_count
 	local default_priority = vim.hl.priorities.treesitter
 	local overflow = false
@@ -283,17 +294,28 @@ local function collect(buf, cached, first, last)
 			local included = entry.included
 			local contiguous = #included == 1
 			local tree = entry.tree
+			if placed then
+				context.first, context.last, context.depth = first, last, 0
+			end
 			for id, node, metadata in query:iter_captures(entry.root, buf, first, last) do
+				local region = regions[id]
 				local capture = metadata[id]
 				local conceal = metadata.conceal
 				if conceal == nil and capture then
 					conceal = capture.conceal
 				end
-				local hl_group = highlight(names[id])
-				if conceal ~= nil or hl_group ~= 0 then
-					local priority = tonumber(metadata.priority or capture and capture.priority) or default_priority
+				local hl_group = groups[id]
+				if region then
+					context.record(region, node)
+				elseif conceal ~= nil or hl_group ~= 0 then
+					local priority = metadata.priority or capture and capture.priority
+					priority = priority and tonumber(priority) or default_priority
 					local range, sr, sc, er, ec
-					if contiguous and not (capture and (capture.range or capture.offset)) then
+					local narrowed = capture and capture.range
+					if narrowed and #narrowed == 6 then
+						-- A directive's byte range is what the general lookup would return.
+						range = narrowed
+					elseif contiguous and not (capture and (narrowed or capture.offset)) then
 						-- Unmodified nodes already lie inside a contiguous tree. Avoid
 						-- allocating byte ranges just to intersect them with that tree.
 						sr, sc, er, ec = node:range()
@@ -304,7 +326,10 @@ local function collect(buf, cached, first, last)
 						if range then
 							sr, sc, er, ec = intersection(range, included[i])
 						end
-						if sr and (er > sr or ec > sc) and er + (ec > 0 and 1 or 0) <= line_count then
+						local final = sr and er - (ec == 0 and 1 or 0)
+						-- A capture reaching into these rows may be narrowed to a part outside them.
+						if sr and (er > sr or ec > sc) and er + (ec > 0 and 1 or 0) <= line_count
+							and sr < last and final >= first then
 							local parts = sr == er and type(conceal) == "string" and graphemes[conceal]
 							if parts == nil then
 								parts = split(conceal)
@@ -313,7 +338,6 @@ local function collect(buf, cached, first, last)
 							if line then
 								overflow = spread(rows, first, last, line, sr, sc, ec, parts, hl_group, priority, tree) or overflow
 							else
-								local final = er - (ec == 0 and 1 or 0)
 								local mark = {
 									sr,
 									sc,
@@ -342,6 +366,22 @@ local function collect(buf, cached, first, last)
 				end
 			end
 		end
+	end
+	return overflow
+end
+
+-- While the query runs, its predicates and directives read the collected lines
+-- and the regions recorded so far. Nothing may stay shared if the query fails.
+local function collect(buf, cached, first, last)
+	local rows = {}
+	for i, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
+		cached.lines[first + i - 1] = line
+	end
+	context.buf, context.lines = buf, cached.lines
+	local ok, overflow = pcall(scan, buf, cached, first, last, rows)
+	context.buf, context.lines, context.last = nil, nil, 0
+	if not ok then
+		error(overflow, 0)
 	end
 	if overflow then
 		anchor(buf)
@@ -520,20 +560,6 @@ local function shown(mark)
 	return opts
 end
 
--- Neovim places the cursor without counting ephemeral inline text, and formula
--- reveal follows the cursor, so both need the current window's cursor row.
-local function track_cursor(win, buf, cached, level)
-	cached.level = level
-	local formula = vim.g.latex_conceal_reveal == "formula"
-	if not (formula or anchored[buf]) or win ~= api.nvim_get_current_win() then
-		cached.cursor_row, cached.drawn = nil, nil
-		return
-	end
-	local cursor = api.nvim_win_get_cursor(win)
-	cached.cursor_row, cached.cursor_col = cursor[1] - 1, cursor[2]
-	cached.reveal = formula and cursor_line_concealed(win)
-end
-
 local function redraw_row(win, row)
 	api.nvim__redraw({ win = win, range = { row, row + 1 } })
 end
@@ -575,6 +601,33 @@ local function leave_window()
 	if drawn and (drawn[2] or anchored[cached.buf]) then
 		redraw_row(win, drawn[1])
 	end
+end
+
+-- Cursor motion costs nothing until a window reveals formulas or draws overflow.
+local function follow()
+	following = true
+	local group = api.nvim_create_augroup("latex-conceal-cursor", {})
+	api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "WinEnter" }, { group = group, callback = follow_cursor })
+	api.nvim_create_autocmd("WinLeave", { group = group, callback = leave_window })
+end
+
+-- Neovim places the cursor without counting ephemeral inline text, and formula
+-- reveal follows the cursor, so both need the current window's cursor row.
+local function track_cursor(win, buf, cached, level)
+	cached.level = level
+	local formula = vim.g.latex_conceal_reveal == "formula"
+	local tracked = formula or anchored[buf]
+	-- A window drawn while another is current still needs repainting on entry.
+	if tracked and not following then
+		follow()
+	end
+	if not tracked or win ~= api.nvim_get_current_win() then
+		cached.cursor_row, cached.drawn = nil, nil
+		return
+	end
+	local cursor = api.nvim_win_get_cursor(win)
+	cached.cursor_row, cached.cursor_col = cursor[1] - 1, cursor[2]
+	cached.reveal = formula and cursor_line_concealed(win)
 end
 
 local function on_win(_, win, buf, top, bottom)
@@ -785,6 +838,11 @@ function M.setup()
 	end
 	initialized = true
 	api.nvim_set_decoration_provider(namespace, { on_win = on_win, on_range = on_range })
+	-- A closing brace or delimiter has its own capture; color it like the opening one.
+	local function link_closing()
+		api.nvim_set_hl(0, "@conceal.close.latex", { default = true, link = "@conceal.latex" })
+	end
+	link_closing()
 	local group = api.nvim_create_augroup("latex-conceal", {})
 	api.nvim_create_autocmd({ "BufUnload", "BufWipeout" }, {
 		group = group,
@@ -797,8 +855,6 @@ function M.setup()
 			end
 		end
 	})
-	api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "WinEnter" }, { group = group, callback = follow_cursor })
-	api.nvim_create_autocmd("WinLeave", { group = group, callback = leave_window })
 	api.nvim_create_autocmd("WinClosed", {
 		group = group,
 		callback = function (event)
@@ -808,7 +864,8 @@ function M.setup()
 	api.nvim_create_autocmd("ColorScheme", {
 		group = group,
 		callback = function ()
-			highlights = {}
+			link_closing()
+			queries = setmetatable({}, { __mode = "k" })
 			windows = {}
 		end
 	})

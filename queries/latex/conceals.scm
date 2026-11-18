@@ -3,6 +3,27 @@
 ; Every pattern below is evaluated for each node it structurally matches, and
 ; each candidate match costs a Lua round trip, so the patterns are shaped to
 ; reject nodes in the C query cursor before any predicate or directive runs.
+; Compiling a pattern is costly too when a child must be found among arbitrary
+; siblings, so braces and delimiters are not matched as children: their node is
+; captured twice and #latex-ends! narrows the captures to its two end tokens.
+
+; Mathematics, text commands and labels. The renderer records these regions as
+; the query yields them, in document order, which lets #latex-math? and the
+; symbol directives place a node without walking its ancestors. A formula's
+; delimiters are hidden by the same match.
+([
+  (inline_formula)
+  (displayed_equation)
+] @_math @conceal @conceal.close
+  (#latex-ends! @conceal @conceal.close)
+  (#set! @conceal conceal "")
+  (#set! @conceal.close conceal ""))
+
+(math_environment) @_math
+
+(text_mode) @_text
+
+(label_definition) @_label
 
 ; Symbol commands share one lookup; the directive selects math or text context,
 ; excludes labels, and hides emphasis wrappers such as \emph and \textbf.
@@ -11,36 +32,20 @@
   (#latex-symbol! @conceal))
 
 ; One match per group checks the group's parent once for both braces. The
-; conceal is set on the brace capture only, so the group itself stays visible.
-((curly_group
-  "{" @conceal
-  "}" @conceal) @_group
-  (#not-has-parent? @_group
+; captures are narrowed to the braces, so the group itself stays visible.
+((curly_group) @conceal @conceal.close
+  (#not-latex-parent? @conceal
     title_declaration author_declaration chapter part section subsection subsubsection paragraph
     subparagraph generic_command)
-  (#set! @conceal conceal ""))
+  (#latex-ends! @conceal @conceal.close)
+  (#set! @conceal conceal "")
+  (#set! @conceal.close conceal ""))
 
 (math_delimiter
   [
     left_command: _ @conceal
     right_command: _ @conceal
   ]
-  (#set! conceal ""))
-
-([
-  (inline_formula
-    [
-      "$"
-      "\\("
-      "\\)"
-    ] @conceal)
-  (displayed_equation
-    [
-      "$$"
-      "\\["
-      "\\]"
-    ] @conceal)
-]
   (#set! conceal ""))
 
 (text_mode
@@ -79,34 +84,19 @@
   (#latex-script! @conceal))
 
 ; Braced scripts: a single word or operator inside a group follows the nearest
-; enclosing script through grouping braces. Only braced words are candidates.
+; enclosing script through grouping braces. The parser leaves `=`, `(` and `)`
+; as anonymous tokens of the group, which count directly inside a script only.
 (curly_group
-  (text
-    word: [
-      (word)
-      (operator)
-    ] @conceal)
-  (#latex-script-supported? @conceal)
-  (#latex-math? @conceal)
-  (#latex-script! @conceal))
-
-; The parser represents these grouped operators as anonymous tokens.
-([
-  (subscript
-    subscript: (curly_group
-      [
-        "="
-        "("
-        ")"
-      ] @conceal))
-  (superscript
-    superscript: (curly_group
-      [
-        "="
-        "("
-        ")"
-      ] @conceal))
-]
+  [
+    (text
+      word: [
+        (word)
+        (operator)
+      ] @conceal)
+    "=" @conceal
+    "(" @conceal
+    ")" @conceal
+  ]
   (#latex-script-supported? @conceal)
   (#latex-math? @conceal)
   (#latex-script! @conceal))
@@ -124,22 +114,21 @@
   (#latex-math? @conceal)
   (#set! @conceal conceal ""))
 
-; Fractions display as (numerator⧸ denominator).
+; Fractions display as (numerator⧸ denominator). Each argument is captured
+; twice and narrowed to its opening and closing brace.
 ((generic_command
   .
   command: (command_name) @conceal.command
   .
-  arg: (curly_group
-    "{" @conceal.open1
-    "}" @conceal.close1)
+  arg: (curly_group) @conceal.open1 @conceal.close1
   .
-  arg: (curly_group
-    "{" @conceal.open2
-    "}" @conceal.close2)
+  arg: (curly_group) @conceal.open2 @conceal.close2
   .)
-  (#any-of? @conceal.command "\\frac" "\\dfrac" "\\tfrac" "\\cfrac")
+  (#latex-command? @conceal.command "\\frac" "\\dfrac" "\\tfrac" "\\cfrac")
   (#latex-math? @conceal.command)
   (#set! priority 101)
+  (#latex-ends! @conceal.open1 @conceal.close1)
+  (#latex-ends! @conceal.open2 @conceal.close2)
   (#set! @conceal.command conceal "(")
   (#set! @conceal.open1 conceal "")
   (#set! @conceal.close1 conceal "⧸")
@@ -167,12 +156,11 @@
   .
   command: (command_name) @conceal.command
   .
-  arg: (curly_group
-    "{" @conceal.open
-    "}" @conceal.close)
+  arg: (curly_group) @conceal.open @conceal.close
   .)
-  (#any-of? @conceal.command
+  (#latex-command? @conceal.command
     "\\bra" "\\ket" "\\abs" "\\norm" "\\pmod" "\\pod" "\\mod" "\\operatorname" "\\operatorname*")
   (#latex-math? @conceal.command)
   (#set! priority 101)
+  (#latex-ends! @conceal.open @conceal.close)
   (#latex-delimiters! @conceal.command @conceal.close @conceal.open))
