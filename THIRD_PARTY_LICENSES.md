@@ -42,6 +42,10 @@ The LaTeX math symbol conceal table includes entries derived from or checked
 against the `unicode-math` symbol data, including `unicode-math-table.tex` and
 `unimath-symbols.pdf`.
 
+Variant relations use the [Unicode standardized variation sequences](https://www.unicode.org/Public/UCD/latest/ucd/StandardizedVariants.txt).
+The [WHATWG named character references](https://html.spec.whatwg.org/entities.json)
+give the corresponding code points for `gvertneqq`, `varsubsetneqq`, and related names.
+
 - Source: [unicode-math](https://github.com/latex3/unicode-math)
 - License: LaTeX Project Public License, version 1.3c or later
   (LPPL-1.3c-or-later)

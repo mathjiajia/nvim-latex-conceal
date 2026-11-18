@@ -25,18 +25,19 @@
 
 (label_definition) @_label
 
-; Symbol commands share one lookup; the directive selects math or text context,
-; excludes labels, and hides emphasis wrappers such as \emph and \textbf.
+; Symbol commands share one lookup; the directive selects math or text context
+; and excludes labels.
 (generic_command
   command: (command_name) @conceal
+  (#set! latex.conceal-only)
   (#latex-symbol! @conceal))
 
-; One match per group checks the group's parent once for both braces. The
-; captures are narrowed to the braces, so the group itself stays visible.
+; One match per group decides for both braces whether they hide: in
+; mathematics, around \text content, and around a formatting command's first
+; argument. The captures are narrowed to the braces, so the group itself stays
+; visible.
 ((curly_group) @conceal @conceal.close
-  (#not-latex-parent? @conceal
-    title_declaration author_declaration chapter part section subsection subsubsection paragraph
-    subparagraph generic_command)
+  (#latex-braces? @conceal)
   (#latex-ends! @conceal @conceal.close)
   (#set! @conceal conceal "")
   (#set! @conceal.close conceal ""))
@@ -62,6 +63,7 @@
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
+  (#set! latex.conceal-only)
   (#latex-argument! @conceal))
 
 ; Unbraced scripts: the node text such as `_1` or `^n` selects the replacement.
@@ -142,6 +144,7 @@
     right_delimiter: _ @conceal
   ]
   (#latex-math? @conceal)
+  (#set! latex.conceal-only)
   (#set-pairs! @conceal conceal
     "." "" "\\{" "{" "\\}" "}" "\\|" "‖"
     "\\langle" "⟨" "\\rangle" "⟩" "\\lceil" "⌈" "\\rceil" "⌉"

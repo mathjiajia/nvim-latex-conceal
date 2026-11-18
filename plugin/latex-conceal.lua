@@ -138,25 +138,8 @@ local function set_pairs(match, _, source, pred, metadata)
 	end
 end
 
--- #has-parent? and #any-of? with their arguments cached as a set: the built-in
--- predicates copy their argument list or the node's byte ranges on every call.
----@param match table<integer, TSNode[]>
----@param pred  any[]
-local function has_parent(match, _, _, pred)
-	local nodes = match[pred[2]]
-	if not nodes or #nodes == 0 then
-		return true
-	end
-	local types = type_set(pred, 3)
-	for _, node in ipairs(nodes) do
-		local parent = node:parent()
-		if parent and types[parent:type()] then
-			return true
-		end
-	end
-	return false
-end
-
+-- #any-of?, reading node text like the directives: the built-in predicate
+-- copies every node's byte range to extract its text.
 ---@param match  table<integer, TSNode[]>
 ---@param source integer | string
 ---@param pred   any[]
@@ -175,7 +158,6 @@ local function is_command(match, _, source, pred)
 end
 
 ts.query.add_predicate("has-grandparent?", has_grandparent, { force = true })
-ts.query.add_predicate("latex-parent?", has_parent, { force = true })
 ts.query.add_predicate("latex-command?", is_command, { force = true })
 ts.query.add_predicate("latex-script?", in_script, { force = true })
 ts.query.add_directive("set-pairs!", set_pairs, { force = true })
@@ -233,8 +215,28 @@ end
 -- Replacement tables load on first use, when a query needs them.
 local symbols, exact, fonts, scripts
 
--- Emphasis wrappers are hidden in every context, like the braces they own.
-local hidden_commands = { ["\\emph"] = "", ["\\mathit"] = "", ["\\textit"] = "", ["\\mathbf"] = "", ["\\textbf"] = "" }
+local function math_symbol(text)
+	symbols = symbols or require("latex-conceal.symbols")
+	return symbols.words.math[text] or symbols.math_common[text] or symbols.math[text]
+end
+
+-- The nearest sibling before or after a node, skipping comments.
+---@param node  TSNode
+---@param after boolean?
+---@return TSNode?
+local function sibling(node, after)
+	repeat
+		if after then
+			node = node:next_sibling()
+		else
+			node = node:prev_sibling()
+		end
+	until not node or not node:extra()
+	return node
+end
+
+-- Formatting commands hide their name and their first argument's braces.
+local formatting = { ["\\emph"] = true, ["\\mathit"] = true, ["\\textit"] = true, ["\\mathbf"] = true, ["\\textbf"] = true }
 
 -- The query excludes labels; enclosing text takes precedence over math.
 ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metadata)
@@ -243,19 +245,31 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 	if not nodes or #nodes == 0 then
 		return
 	end
-	symbols = symbols or require("latex-conceal.symbols")
 	for _, node in ipairs(nodes) do
 		local text = get_node_text(node, source)
-		local replacement = hidden_commands[text]
-		if replacement == nil then
-			local math_symbol = symbols.words.math[text] or symbols.math_common[text] or symbols.math[text]
-			local text_symbol = symbols.words.text[text] or symbols.text[text]
-			if math_symbol ~= nil or text_symbol ~= nil then
+		local replacement
+		if formatting[text] then
+			local after = sibling(node, true)
+			if after and after:type() == "curly_group" then
+				replacement = ""
+			end
+		else
+			local math_value = math_symbol(text)
+			local text_value = symbols.words.text[text] or symbols.text[text]
+			if math_value ~= nil or text_value ~= nil then
 				-- Text ancestors include labels, so only a text replacement needs the label check.
 				if in_math(node) then
-					replacement = math_symbol
-				elseif text_symbol ~= nil and not in_label(node) then
-					replacement = text_symbol
+					replacement = math_value
+				elseif text_value ~= nil and not in_label(node) then
+					replacement = text_value
+				end
+			end
+			-- An indexed root keeps its command: \sqrt[3]{x}.
+			if replacement and text == "\\sqrt" then
+				local _, _, row, col = node:range()
+				local after = node:tree():root():descendant_for_range(row, col, row, col + 1)
+				if after and after:type() == "[" then
+					replacement = nil
 				end
 			end
 		end
@@ -479,6 +493,53 @@ ts.query.add_directive("latex-ends!", function (match, _, _, pred, metadata)
 	-- Without its token a capture covers nothing, never the whole node.
 	capture_metadata(metadata, open).range = first or { sr, sc, sb, sr, sc, sb }
 	capture_metadata(metadata, close).range = last or { sr, sc, sb, sr, sc, sb }
+end, { force = true }
+)
+
+local function simple_radicand(group, source)
+	if group:has_error() or group:child_count() ~= 3 then
+		return false
+	end
+	local atom = group:child(1)
+	if atom:type() == "text" and atom:child_count() == 1 then
+		atom = atom:child(0)
+	end
+	local value
+	if atom:type() == "word" and atom:byte_length() <= 4 then
+		value = get_node_text(atom, source)
+	elseif atom:type() == "generic_command" and atom:child_count() == 1 then
+		value = math_symbol(get_node_text(atom, source))
+	end
+	return value ~= nil and value:find("%S") ~= nil and vim.fn.strchars(value, 1) == 1
+end
+
+-- Whether a group's braces hide: around \text content and a formatting
+-- command's first argument anywhere, and in mathematics around \sqrt's argument
+-- when it is a single character and around any group outside command
+-- arguments, except after an optional argument such as \sqrt[3]{x}.
+ts.query.add_predicate("latex-braces?", function (match, _, source, pred)
+	local nodes = match[pred[2]]
+	local group = nodes and nodes[1]
+	if not group then
+		return false
+	end
+	local parent = group:parent()
+	local kind = parent and parent:type()
+	if kind == "text_mode" then
+		return true
+	elseif kind == "generic_command" then
+		-- Only the first argument follows the command name directly.
+		local command = parent:child(0)
+		local name = get_node_text(command, source)
+		if name == "\\sqrt" then
+			return sibling(group) == command and in_math(group) and simple_radicand(group, source)
+		end
+		return formatting[name] == true and sibling(group) == command
+	elseif not in_math(group) then
+		return false
+	end
+	local previous = sibling(group)
+	return not previous or previous:type() ~= "]"
 end, { force = true }
 )
 

@@ -330,7 +330,7 @@ local function scan(buf, cached, first, last, rows)
 				local hl_group = groups[id]
 				if region then
 					context.record(region, node)
-				elseif conceal ~= nil or hl_group ~= 0 then
+				elseif conceal ~= nil or (hl_group ~= 0 and not metadata["latex.conceal-only"]) then
 					local priority = metadata.priority or capture and capture.priority
 					priority = priority and tonumber(priority) or default_priority
 					local range, sr, sc, er, ec

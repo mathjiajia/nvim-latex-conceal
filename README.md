@@ -72,7 +72,9 @@ still reveal the whole line.
 
 ## Features
 
-- Delimiters such as `\left`, math delimiters, and selected curly braces.
+- Math delimiters, sizing commands such as `\left`, and grouping braces in math.
+- `\emph`, `\textbf`, `\textit`, `\mathbf`, and `\mathit` hide their command and first argument's braces:
+  `\emph{one}{two}` → `one{two}`. Ordinary braces in prose, captions, and macro definitions stay visible.
 - Fonts such as `\mathbb{Z}` → `ℤ`, `\mathbf{A}` → `𝐀`, and `\mathtt{x}` → `𝚡`.
 - Greek letters, upright variants, and Unicode mathematical alphabets.
 - Mathematical symbols, arrows, relations, integrals, and named delimiters.
@@ -82,6 +84,8 @@ still reveal the whole line.
 - Braced accents such as `\'{e}` → `é`, `\vec{x}` → `x⃗`, and `\hat{\alpha}` → `α̂`.
 - Single-symbol arrow accents such as `\overleftarrow{x}` → `x⃖` and `\overrightarrow{x}` → `x⃗`.
 - Fractions using `\frac`, `\dfrac`, `\tfrac`, and `\cfrac`.
+- Square roots retain their scope: `\sqrt{y}` and `\sqrt y` → `√y`, `\sqrt{x+y}` → `√{x+y}`.
+  Indexed roots retain the command, index, and argument braces.
 - Physics notation: `\bra{ψ}` → `⟨ψ|`, `\ket{ψ}` → `|ψ⟩`, `\abs{x}` → `|x|`, and `\norm{x}` → `‖x‖`.
 - Operator names without their backslash, such as `\log` → `log` and `\liminf` → `lim inf`,
   and `\operatorname{rank}` → `rank`.
@@ -112,6 +116,9 @@ Longer or unsupported arguments are not collapsed into a single character.
 The command `\div` remains visible for principal-divisor notation such as `\div(f)`.
 `\not`, `\nolimits`, and standalone combining enclosures retain their source.
 Unavailable Unicode styles are not replaced by a different alphabet.
+Negated relations and variant forms use standard Unicode sequences rather
+than private-use characters. Some fonts show the base relation instead of
+its vertical-stroke variant. For compatibility `\imath` retains `ı`.
 Typst and graphical equation rendering are outside this plugin's scope.
 See [third-party notices](THIRD_PARTY_LICENSES.md) for the symbol data attribution.
 
@@ -119,6 +126,9 @@ See [third-party notices](THIRD_PARTY_LICENSES.md) for the symbol data attributi
 
 Conceal patterns live in `queries/latex/conceals.scm`. Custom patterns can extend
 the `conceals` query independently of ordinary highlighting queries.
+By default a named capture can highlight source even without a replacement.
+Add `(#set! latex.conceal-only)` to a lookup pattern to skip its captures
+when they have no `conceal` value. An empty-string replacement still hides its range.
 Exact font and accent mappings live in `lua/latex-conceal/exact.lua`, script
 replacements in `lua/latex-conceal/scripts.lua`, and symbol commands in
 `lua/latex-conceal/symbols.lua`.
@@ -163,9 +173,13 @@ The plugin registers these directives and predicates for custom patterns:
 - `(#latex-ends! @open @close)` narrows two captures of one group or formula to
   its opening and closing brace or delimiter. A capture whose token is missing
   covers nothing.
+- `(#latex-braces? @group)` accepts the groups whose braces the shipped query
+  hides: groups in math other than command arguments and groups after an optional
+  argument, `\text` content, the first argument of `\emph`, `\textbf`, `\textit`,
+  `\mathbf` and `\mathit`, and in math that of `\sqrt` around a single character.
 - `(#has-grandparent? @capture type ...)` and `(#latex-script? @capture kind)`.
-- `(#latex-parent? @capture type ...)` and `(#latex-command? @capture name ...)`
-  behave like `#has-parent?` and `#any-of?`, with their arguments cached as a set.
+- `(#latex-command? @capture name ...)` behaves like `#any-of?`, with its
+  arguments cached as a set.
 - `(#latex-math? @capture)` accepts math outside text commands and labels, from
   the recorded regions or nightly's native Tree-sitter ancestor checks.
 
