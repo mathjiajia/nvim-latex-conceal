@@ -148,16 +148,20 @@ local function in_math(node)
 end
 
 -- Replacement tables load on first use, when a query needs them.
-local symbols, math_symbols, exact, fonts, scripts
+local symbols, math_symbols, text_symbols, exact, fonts, scripts
 local function load_symbols()
 	symbols = require("latex-conceal.symbols")
 	-- Common math symbols take precedence over the supplementary table.
-	math_symbols = {}
-	for command, replacement in pairs(symbols.math) do
-		math_symbols[command] = replacement
+	math_symbols, text_symbols = {}, {}
+	for _, map in ipairs({ symbols.math, symbols.math_common, symbols.words.math }) do
+		for command, replacement in pairs(map) do
+			math_symbols[command] = replacement
+		end
 	end
-	for command, replacement in pairs(symbols.math_common) do
-		math_symbols[command] = replacement
+	for _, map in ipairs({ symbols.text, symbols.words.text }) do
+		for command, replacement in pairs(map) do
+			text_symbols[command] = replacement
+		end
 	end
 end
 
@@ -178,7 +182,7 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 		local text = get_node_text(node, source)
 		local replacement = hidden_commands[text]
 		if replacement == nil then
-			local math_symbol, text_symbol = math_symbols[text], symbols.text[text]
+			local math_symbol, text_symbol = math_symbols[text], text_symbols[text]
 			if math_symbol ~= nil or text_symbol ~= nil then
 				-- Text ancestors include labels, so only a text replacement needs the label walk.
 				if in_math(node) then
@@ -357,14 +361,20 @@ ts.query.add_predicate("latex-script-marker?", function (match, _, source, pred)
 end, { force = true }
 )
 
+-- The command, closing brace and optional opening brace replacements.
 local delimiters = {
 	["\\bra"] = { "⟨", "|" },
 	["\\ket"] = { "|", "⟩" },
 	["\\abs"] = { "|", "|" },
-	["\\norm"] = { "‖", "‖" }
+	["\\norm"] = { "‖", "‖" },
+	["\\pmod"] = { "(mod", ")", " " },
+	["\\pod"] = { "(", ")" },
+	["\\mod"] = { "mod", "", " " },
+	["\\operatorname"] = { "", "" },
+	["\\operatorname*"] = { "", "" }
 }
 ts.query.add_directive("latex-delimiters!", function (match, _, source, pred, metadata)
-	local command, close = pred[2], pred[3]
+	local command, close, open = pred[2], pred[3], pred[4]
 	local nodes = match[command]
 	if not nodes or #nodes == 0 then
 		return
@@ -374,6 +384,9 @@ ts.query.add_directive("latex-delimiters!", function (match, _, source, pred, me
 		if pair then
 			capture_metadata(metadata, command).conceal = pair[1]
 			capture_metadata(metadata, close).conceal = pair[2]
+			if open then
+				capture_metadata(metadata, open).conceal = pair[3] or ""
+			end
 		end
 	end
 end, { force = true }

@@ -54,6 +54,22 @@ There is no `setup()` call.
 To show the source in the current window, use `:setlocal conceallevel=0`;
 restore conceals with `:setlocal conceallevel=2`.
 
+### Formula reveal
+
+By default the whole cursor line shows its source, except in the modes listed
+in `concealcursor`. To keep the line concealed and show only the source of the
+formula under the cursor, list those modes and set:
+
+```lua
+vim.o.concealcursor = "n"
+vim.g.latex_conceal_reveal = "formula"
+```
+
+The revealed unit is the innermost inline formula, displayed equation, or math
+environment around the cursor, limited to the cursor line. Outside math, the
+conceal under the cursor shows its source. Modes missing from `concealcursor`
+still reveal the whole line.
+
 ## Features
 
 - Delimiters such as `\left`, math delimiters, and selected curly braces.
@@ -67,6 +83,10 @@ restore conceals with `:setlocal conceallevel=2`.
 - Single-symbol arrow accents such as `\overleftarrow{x}` → `x⃖` and `\overrightarrow{x}` → `x⃗`.
 - Fractions using `\frac`, `\dfrac`, `\tfrac`, and `\cfrac`.
 - Physics notation: `\bra{ψ}` → `⟨ψ|`, `\ket{ψ}` → `|ψ⟩`, `\abs{x}` → `|x|`, and `\norm{x}` → `‖x‖`.
+- Operator names without their backslash, such as `\log` → `log` and `\liminf` → `lim inf`,
+  and `\operatorname{rank}` → `rank`.
+- Modular arithmetic: `\pmod{n}` → `(mod n)`, `\pod{n}` → `(n)`, `\bmod` and `\mod` → `mod`.
+- `\quad` and `\qquad` as two and four spaces.
 - Text symbol commands such as `\textalpha` and `\textdegree`.
 
 Conceals change only the display, never the buffer contents.
@@ -88,9 +108,8 @@ Font and accent replacements apply to a single supported letter, digit, or
 Greek command in braces.
 Longer or unsupported arguments are not collapsed into a single character.
 The command `\div` remains visible for principal-divisor notation such as `\div(f)`.
-Operators such as `\exp`, `\Pr`, `\log`, and `\not`, controls such as `\quad`,
-`\qquad`, and `\nolimits`, and standalone combining enclosures retain their
-source. Unavailable Unicode styles are not replaced by a different alphabet.
+`\not`, `\nolimits`, and standalone combining enclosures retain their source.
+Unavailable Unicode styles are not replaced by a different alphabet.
 Typst and graphical equation rendering are outside this plugin's scope.
 See [third-party notices](THIRD_PARTY_LICENSES.md) for the symbol data attribution.
 
@@ -119,10 +138,22 @@ and predicates for custom patterns:
   single supported character; `(#set! @marker conceal "")` then hides `_` or `^`.
 - `(#latex-conceal! @capture kind)` looks up `math`, `text`, `font`, `exact`,
   `bar`, or `overline` replacements.
-- `(#latex-delimiters! @command @close)` and `(#set-pairs! @capture key ...)`.
+- `(#latex-delimiters! @command @close @open)`, where `@open` is optional, and
+  `(#set-pairs! @capture key ...)`.
 - `(#has-grandparent? @capture type ...)` and `(#latex-script? @capture kind)`.
 - `(#latex-math? @capture)` accepts math outside text commands and labels, using
   nightly's native Tree-sitter ancestor checks.
+
+Neovim conceals a range with at most one character, so a longer `conceal` value
+on a single-line capture is spread over the source characters. Characters
+shared at either end stay visible: `\log` → `log` hides only the backslash. Each
+remaining source character shows one replacement character and surplus source
+is hidden. A replacement wider than its source continues as inline virtual
+text. Neovim draws ephemeral inline text only in buffers that hold a stored
+inline mark, so such buffers receive one empty inline mark. Neovim places the
+cursor without counting ephemeral inline text, so the cursor line of the
+current window omits that surplus. None of the shipped replacements is wider
+than its source.
 
 ## Acknowledgement
 

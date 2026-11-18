@@ -3,15 +3,23 @@ local ts = vim.treesitter
 -- Register after native highlighting so equal-priority capture colors keep their order.
 local highlighter = ts.highlighter
 local namespace = api.nvim_create_namespace("latex-conceal")
+-- Neovim draws ephemeral inline virtual text only in buffers that also hold a
+-- stored inline mark, so a buffer with overflowing replacements gets one.
+local anchor_namespace = api.nvim_create_namespace("latex-conceal-inline")
 local M = {}
 local margin = 20
 local change_limit = 256
 local windows = {}
 local parsers = setmetatable({}, { __mode = "k" })
 local highlights = {}
+local graphemes = {}
+local anchored = {}
 local serial = 0
 local initialized = false
 local conceallevel_opts = { win = 0 }
+local concealcursor_opts = { win = 0 }
+local math_kinds = { inline_formula = true, displayed_equation = true, math_environment = true }
+local mode_letters = { n = "n", v = "v", V = "v", ["\22"] = "v", i = "i", R = "i", c = "c" }
 
 -- Each parser keeps a version counter and the row ranges that changed since
 -- any window last looked. Neovim reports every replaced or dropped tree
@@ -160,6 +168,106 @@ local function intersection(a, b)
 	return first[1], first[2], last[4], last[5]
 end
 
+-- A mark is { row, col, opts, tree, last row }; spread marks also carry the
+-- columns of the capture they belong to.
+local function add(rows, first, last, mark)
+	for row = math.max(first, mark[1]), math.min(last - 1, mark[5]) do
+		local marks = rows[row]
+		if not marks then
+			marks = {}
+			rows[row] = marks
+		end
+		marks[#marks + 1] = mark
+	end
+end
+
+---@return string[]|false parts the graphemes, or false for at most one
+local function split(replacement)
+	local parts = graphemes[replacement]
+	if parts == nil then
+		parts = vim.fn.split(replacement, [[\zs]])
+		parts = #parts > 1 and parts
+		graphemes[replacement] = parts
+	end
+	return parts
+end
+
+local function anchor(buf)
+	if anchored[buf] then
+		return
+	end
+	anchored[buf] = true
+	vim.schedule(function ()
+		-- Reloading a buffer keeps its extmarks.
+		if anchored[buf] and api.nvim_buf_is_valid(buf)
+			and #api.nvim_buf_get_extmarks(buf, anchor_namespace, 0, -1, { limit = 1 }) == 0 then
+			api.nvim_buf_set_extmark(buf, anchor_namespace, 0, 0, { virt_text = { { "", "Normal" } }, virt_text_pos = "inline" })
+			api.nvim__redraw({ buf = buf, valid = false })
+		end
+	end)
+end
+
+-- Neovim conceals a range with at most one character, so a longer replacement
+-- is spread over the source characters. Characters shared at either end stay
+-- visible, each remaining source character shows one replacement character,
+-- surplus source is hidden and surplus replacement follows as inline text.
+-- Returns true when the replacement overflows its source.
+local function spread(rows, first, last, line, row, sc, ec, parts, hl_group, priority, tree)
+	local source = line:sub(sc + 1, ec)
+	local starts = vim.str_utf_pos(source)
+	local n, m = #starts, #parts
+	local function char(i)
+		return source:sub(starts[i], (starts[i + 1] or #source + 1) - 1)
+	end
+	local function column(i)
+		return i > n and ec or sc + starts[i] - 1
+	end
+	local head, tail = 0, 0
+	while head < n and head < m and char(head + 1) == parts[head + 1] do
+		head = head + 1
+	end
+	while tail < n - head and tail < m - head and char(n - tail) == parts[m - tail] do
+		tail = tail + 1
+	end
+	local span = { sc, ec }
+	local function piece(i, j, conceal)
+		add(rows, first, last, {
+			row,
+			column(i),
+			{ end_row = row, end_col = column(j), conceal = conceal, hl_group = hl_group, priority = priority, ephemeral = true },
+			tree,
+			row,
+			span = span
+		})
+	end
+	local paired = math.min(n, m) - tail
+	for i = head + 1, paired do
+		if char(i) ~= parts[i] then
+			piece(i, i + 1, parts[i])
+		end
+	end
+	if paired < n - tail then
+		piece(paired + 1, n - tail + 1, "")
+	elseif paired < m - tail then
+		add(rows, first, last, {
+			row,
+			column(n - tail + 1),
+			{
+				virt_text = { { table.concat(parts, "", paired + 1, m - tail), hl_group ~= 0 and hl_group or "Conceal" } },
+				virt_text_pos = "inline",
+				priority = priority,
+				ephemeral = true
+			},
+			tree,
+			row,
+			span = span,
+			inline = true
+		})
+		return true
+	end
+	return false
+end
+
 local function collect(buf, cached, first, last)
 	local rows = {}
 	for i, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
@@ -169,6 +277,7 @@ local function collect(buf, cached, first, last)
 	local names = query.captures
 	local line_count = cached.line_count
 	local default_priority = vim.hl.priorities.treesitter
+	local overflow = false
 	for _, entry in ipairs(cached.trees) do
 		if entry.first < last and entry.last >= first then
 			local included = entry.included
@@ -196,32 +305,46 @@ local function collect(buf, cached, first, last)
 							sr, sc, er, ec = intersection(range, included[i])
 						end
 						if sr and (er > sr or ec > sc) and er + (ec > 0 and 1 or 0) <= line_count then
-							local mark = {
-								sr,
-								sc,
-								{
-									end_row = er,
-									end_col = ec,
-									conceal = conceal,
-									hl_group = hl_group,
-									priority = priority,
-									ephemeral = true
-								},
-								tree
-							}
-							for row = math.max(first, sr), math.min(last - 1, er - (ec == 0 and 1 or 0)) do
-								local marks = rows[row]
-								if not marks then
-									marks = {}
-									rows[row] = marks
+							local parts = sr == er and type(conceal) == "string" and graphemes[conceal]
+							if parts == nil then
+								parts = split(conceal)
+							end
+							local line = parts and cached.lines[sr]
+							if line then
+								overflow = spread(rows, first, last, line, sr, sc, ec, parts, hl_group, priority, tree) or overflow
+							else
+								local final = er - (ec == 0 and 1 or 0)
+								local mark = {
+									sr,
+									sc,
+									{
+										end_row = er,
+										end_col = ec,
+										conceal = conceal,
+										hl_group = hl_group,
+										priority = priority,
+										ephemeral = true
+									},
+									tree,
+									final
+								}
+								for row = math.max(first, sr), math.min(last - 1, final) do
+									local marks = rows[row]
+									if not marks then
+										marks = {}
+										rows[row] = marks
+									end
+									marks[#marks + 1] = mark
 								end
-								marks[#marks + 1] = mark
 							end
 						end
 					end
 				end
 			end
 		end
+	end
+	if overflow then
+		anchor(buf)
 	end
 	return rows
 end
@@ -233,8 +356,7 @@ local function crosses_boundary(marks, boundary)
 		return false
 	end
 	for _, mark in ipairs(marks) do
-		local last = mark[3].end_row - (mark[3].end_col == 0 and 1 or 0)
-		if mark[1] < boundary and last >= boundary then
+		if mark[1] < boundary and mark[5] >= boundary then
 			return true
 		end
 	end
@@ -315,9 +437,8 @@ local function pending_rows(buf, cached)
 	for row, marks in pairs(cached.rows) do
 		for _, mark in ipairs(marks) do
 			if valid[mark] == nil then
-				local last = mark[3].end_row - (mark[3].end_col == 0 and 1 or 0)
 				local same = true
-				for line = mark[1], last do
+				for line = mark[1], mark[5] do
 					if not unchanged[line] then
 						same = false
 						break
@@ -334,6 +455,128 @@ local function pending_rows(buf, cached)
 	return rows
 end
 
+-- Neovim conceals the current window's cursor line only in the modes listed
+-- in 'concealcursor'.
+local function cursor_line_concealed(win)
+	local letter = mode_letters[api.nvim_get_mode().mode:sub(1, 1)]
+	concealcursor_opts.win = win
+	return letter ~= nil and api.nvim_get_option_value("concealcursor", concealcursor_opts):find(letter, 1, true) ~= nil
+end
+
+-- The columns of the cursor row that formula reveal shows as source: the
+-- innermost formula around the cursor or, outside math, the conceal under it.
+local function cursor_unit(cached, rows, row, col)
+	for _, entry in ipairs(cached.trees) do
+		if entry.first <= row and entry.last >= row then
+			local node = entry.root:named_descendant_for_range(row, col, row, col + 1)
+			while node do
+				if math_kinds[node:type()] then
+					local sr, sc, er, ec = node:range()
+					return sr < row and 0 or sc, er > row and math.huge or ec
+				end
+				node = node:parent()
+			end
+		end
+	end
+	for _, mark in ipairs(rows[row] or {}) do
+		local span, opts = mark.span, mark[3]
+		local first, last
+		if span then
+			first, last = span[1], span[2]
+		elseif opts.conceal ~= nil and mark[1] == row and opts.end_row == row then
+			first, last = mark[2], opts.end_col
+		end
+		if first and first <= col and col < last then
+			return first, last
+		end
+	end
+end
+
+local function within(mark, first, last)
+	local span = mark.span
+	if span then
+		return span[1] >= first and span[2] <= last
+	end
+	local opts = mark[3]
+	return mark[1] == opts.end_row and mark[2] >= first and opts.end_col <= last
+end
+
+-- A revealed capture keeps its highlight, as on Neovim's revealed cursor line.
+local function shown(mark)
+	local opts = mark.shown
+	if opts == nil then
+		opts = mark[3]
+		if opts.conceal ~= nil then
+			opts = opts.hl_group ~= 0 and {
+				end_row = opts.end_row,
+				end_col = opts.end_col,
+				hl_group = opts.hl_group,
+				priority = opts.priority,
+				ephemeral = true
+			}
+		end
+		mark.shown = opts
+	end
+	return opts
+end
+
+-- Neovim places the cursor without counting ephemeral inline text, and formula
+-- reveal follows the cursor, so both need the current window's cursor row.
+local function track_cursor(win, buf, cached, level)
+	cached.level = level
+	local formula = vim.g.latex_conceal_reveal == "formula"
+	if not (formula or anchored[buf]) or win ~= api.nvim_get_current_win() then
+		cached.cursor_row, cached.drawn = nil, nil
+		return
+	end
+	local cursor = api.nvim_win_get_cursor(win)
+	cached.cursor_row, cached.cursor_col = cursor[1] - 1, cursor[2]
+	cached.reveal = formula and cursor_line_concealed(win)
+end
+
+local function redraw_row(win, row)
+	api.nvim__redraw({ win = win, range = { row, row + 1 } })
+end
+
+-- Neovim repaints no rows for cursor motion within a concealed cursor line, so
+-- repaint those whose revealed formula or suppressed overflow changes.
+local function follow_cursor()
+	local win = api.nvim_get_current_win()
+	local cached = windows[win]
+	if not cached then
+		return
+	end
+	local formula, overflow = vim.g.latex_conceal_reveal == "formula", anchored[cached.buf]
+	if not (formula or overflow) then
+		return
+	end
+	local cursor = api.nvim_win_get_cursor(win)
+	local row, first, last = cursor[1] - 1, false, false
+	if formula and cursor_line_concealed(win) then
+		first, last = cursor_unit(cached, cached.pending or cached.rows, row, cursor[2])
+		first, last = first or false, last or false
+	end
+	local drawn = cached.drawn
+	if drawn and drawn[1] == row and drawn[2] == first and drawn[3] == last then
+		return
+	end
+	if drawn and (overflow or drawn[2]) then
+		redraw_row(win, drawn[1])
+	end
+	if overflow or first then
+		redraw_row(win, row)
+	end
+end
+
+local function leave_window()
+	local win = api.nvim_get_current_win()
+	local cached = windows[win]
+	local drawn = cached and cached.drawn
+	if drawn and (drawn[2] or anchored[cached.buf]) then
+		redraw_row(win, drawn[1])
+	end
+end
+
 local function on_win(_, win, buf, top, bottom)
 	local active = highlighter.active[buf]
 	if not active then
@@ -342,7 +585,8 @@ local function on_win(_, win, buf, top, bottom)
 	end
 	-- Nothing is concealed at level 0, so skip the query and the replay entirely.
 	conceallevel_opts.win = win
-	if api.nvim_get_option_value("conceallevel", conceallevel_opts) == 0 then
+	local level = api.nvim_get_option_value("conceallevel", conceallevel_opts)
+	if level == 0 then
 		windows[win] = nil
 		return false
 	end
@@ -354,6 +598,7 @@ local function on_win(_, win, buf, top, bottom)
 				cached.pending = cached.tick == tick and cached.rows or pending_rows(buf, cached)
 				cached.pending_tick = tick
 			end
+			track_cursor(win, buf, cached, level)
 			return true
 		end
 		return false
@@ -393,6 +638,7 @@ local function on_win(_, win, buf, top, bottom)
 			cached.priorities = tree_priorities(state.index, top, bottom)
 			cached.priorities_version, cached.top, cached.bottom = state.version, top, bottom
 		end
+		track_cursor(win, buf, cached, level)
 		return true
 	end
 
@@ -451,9 +697,11 @@ local function on_win(_, win, buf, top, bottom)
 		ready = deferred and {} or nil,
 		sparse = sparse,
 		view_first = top,
-		view_last = view_last
+		view_last = view_last,
+		drawn = cached and cached.buf == buf and cached.drawn or nil
 	}
 	next_cache.rows = deferred and {} or collect_viewport(buf, next_cache, previous)
+	track_cursor(win, buf, next_cache, level)
 	windows[win] = next_cache
 	if #state.changes > change_limit / 2 then
 		trim_changes(state, tick)
@@ -489,16 +737,35 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 	end
 	serial = serial + 1
 	local rows, priorities = cached.pending or cached.rows, cached.priorities
+	local cursor_row, reveal_first, reveal_last = cached.cursor_row, false, false
+	if cursor_row and cursor_row >= first and cursor_row < last then
+		if cached.reveal then
+			reveal_first, reveal_last = cursor_unit(cached, rows, cursor_row, cached.cursor_col)
+			reveal_first, reveal_last = reveal_first or false, reveal_last or false
+		end
+		cached.drawn = { cursor_row, reveal_first, reveal_last }
+	end
+	-- Inline text would misplace the cursor, and conceallevel 3 hides replacements.
+	local overflow = cached.level ~= 3
 	for row = first, last - 1 do
 		local marks = rows[row]
 		if marks then
+			local cursor = row == cursor_row
 			for i = 1, #marks do
 				local mark = marks[i]
 				local priority = priorities[mark[4]]
 				if priority and mark.serial ~= serial then
 					mark.serial = serial
-					mark[3]._subpriority = priority
-					api.nvim_buf_set_extmark(buf, namespace, mark[1], mark[2], mark[3])
+					local opts = mark[3]
+					if mark.inline then
+						opts = overflow and not cursor and opts
+					elseif cursor and reveal_first and within(mark, reveal_first, reveal_last) then
+						opts = shown(mark)
+					end
+					if opts then
+						opts._subpriority = priority
+						api.nvim_buf_set_extmark(buf, namespace, mark[1], mark[2], opts)
+					end
 				end
 			end
 		end
@@ -522,6 +789,7 @@ function M.setup()
 	api.nvim_create_autocmd({ "BufUnload", "BufWipeout" }, {
 		group = group,
 		callback = function (event)
+			anchored[event.buf] = nil
 			for win, cached in pairs(windows) do
 				if cached.buf == event.buf then
 					windows[win] = nil
@@ -529,6 +797,8 @@ function M.setup()
 			end
 		end
 	})
+	api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "WinEnter" }, { group = group, callback = follow_cursor })
+	api.nvim_create_autocmd("WinLeave", { group = group, callback = leave_window })
 	api.nvim_create_autocmd("WinClosed", {
 		group = group,
 		callback = function (event)

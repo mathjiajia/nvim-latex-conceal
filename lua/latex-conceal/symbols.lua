@@ -2729,5 +2729,53 @@ return {
 		["\\textzeta"] = "ζ",
 		["\\{"] = "{",
 		["\\}"] = "}"
+	},
+	-- Longer replacements are spread over the command's own characters, so an
+	-- operator name loses only its backslash.
+	words = {
+		math = {
+			["\\arccos"] = "arccos",
+			["\\arcsin"] = "arcsin",
+			["\\arctan"] = "arctan",
+			["\\arg"] = "arg",
+			["\\bmod"] = "mod",
+			["\\cos"] = "cos",
+			["\\cosh"] = "cosh",
+			["\\cot"] = "cot",
+			["\\coth"] = "coth",
+			["\\csc"] = "csc",
+			["\\deg"] = "deg",
+			["\\det"] = "det",
+			["\\dim"] = "dim",
+			["\\exp"] = "exp",
+			["\\gcd"] = "gcd",
+			["\\hom"] = "hom",
+			["\\inf"] = "inf",
+			["\\injlim"] = "inj lim",
+			["\\ker"] = "ker",
+			["\\lg"] = "lg",
+			["\\lim"] = "lim",
+			["\\liminf"] = "lim inf",
+			["\\limsup"] = "lim sup",
+			["\\ln"] = "ln",
+			["\\log"] = "log",
+			["\\max"] = "max",
+			["\\min"] = "min",
+			["\\mod"] = "mod",
+			["\\Pr"] = "Pr",
+			["\\projlim"] = "proj lim",
+			["\\qquad"] = "    ",
+			["\\quad"] = "  ",
+			["\\sec"] = "sec",
+			["\\sin"] = "sin",
+			["\\sinh"] = "sinh",
+			["\\sup"] = "sup",
+			["\\tan"] = "tan",
+			["\\tanh"] = "tanh"
+		},
+		text = {
+			["\\qquad"] = "    ",
+			["\\quad"] = "  "
+		}
 	}
 }

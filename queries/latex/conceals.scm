@@ -161,7 +161,8 @@
     "\\Uparrow" "⇑" "\\Downarrow" "⇓" "\\Updownarrow" "⇕")
   (#latex-conceal! @conceal "math"))
 
-; Physics wrappers share the same structure, context, and priority.
+; Physics wrappers, modular arithmetic such as \pmod{n} → (mod n), and
+; \operatorname share the same structure, context, and priority.
 ((generic_command
   .
   command: (command_name) @conceal.command
@@ -170,8 +171,8 @@
     "{" @conceal.open
     "}" @conceal.close)
   .)
-  (#any-of? @conceal.command "\\bra" "\\ket" "\\abs" "\\norm")
+  (#any-of? @conceal.command
+    "\\bra" "\\ket" "\\abs" "\\norm" "\\pmod" "\\pod" "\\mod" "\\operatorname" "\\operatorname*")
   (#latex-math? @conceal.command)
   (#set! priority 101)
-  (#latex-delimiters! @conceal.command @conceal.close)
-  (#set! @conceal.open conceal ""))
+  (#latex-delimiters! @conceal.command @conceal.close @conceal.open))
