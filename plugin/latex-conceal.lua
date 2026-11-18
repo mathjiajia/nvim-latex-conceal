@@ -231,22 +231,7 @@ local function in_label(node)
 end
 
 -- Replacement tables load on first use, when a query needs them.
-local symbols, math_symbols, text_symbols, exact, fonts, scripts
-local function load_symbols()
-	symbols = require("latex-conceal.symbols")
-	-- Common math symbols take precedence over the supplementary table.
-	math_symbols, text_symbols = {}, {}
-	for _, map in ipairs({ symbols.math, symbols.math_common, symbols.words.math }) do
-		for command, replacement in pairs(map) do
-			math_symbols[command] = replacement
-		end
-	end
-	for _, map in ipairs({ symbols.text, symbols.words.text }) do
-		for command, replacement in pairs(map) do
-			text_symbols[command] = replacement
-		end
-	end
-end
+local symbols, exact, fonts, scripts
 
 -- Emphasis wrappers are hidden in every context, like the braces they own.
 local hidden_commands = { ["\\emph"] = "", ["\\mathit"] = "", ["\\textit"] = "", ["\\mathbf"] = "", ["\\textbf"] = "" }
@@ -258,14 +243,13 @@ ts.query.add_directive("latex-symbol!", function (match, _, source, pred, metada
 	if not nodes or #nodes == 0 then
 		return
 	end
-	if not symbols then
-		load_symbols()
-	end
+	symbols = symbols or require("latex-conceal.symbols")
 	for _, node in ipairs(nodes) do
 		local text = get_node_text(node, source)
 		local replacement = hidden_commands[text]
 		if replacement == nil then
-			local math_symbol, text_symbol = math_symbols[text], text_symbols[text]
+			local math_symbol = symbols.words.math[text] or symbols.math_common[text] or symbols.math[text]
+			local text_symbol = symbols.words.text[text] or symbols.text[text]
 			if math_symbol ~= nil or text_symbol ~= nil then
 				-- Text ancestors include labels, so only a text replacement needs the label check.
 				if in_math(node) then
@@ -347,8 +331,11 @@ ts.query.add_directive("latex-argument!", function (match, _, source, pred, meta
 				capture_metadata(metadata, id).conceal = replacement
 			else
 				replacement = exact.bar[text] or exact.overline[text]
-				if replacement == nil and in_math(node) then
-					replacement = fonts.lookup(text)
+				if replacement == nil then
+					local font = fonts.lookup(text)
+					if font and in_math(node) then
+						replacement = font
+					end
 				end
 				if replacement ~= nil then
 					local entry = capture_metadata(metadata, id)

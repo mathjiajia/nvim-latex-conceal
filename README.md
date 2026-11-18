@@ -93,7 +93,8 @@ Conceals change only the display, never the buffer contents.
 The plugin evaluates its separate `conceals` query for visible LaTeX, caches the
 completed results per window, and replays them as conceal extmarks on unchanged
 redraws. Small scrolls reuse the completed overlap and query only newly exposed
-rows. Edits invalidate those results so the next redraw uses the current
+rows. A jump keeps the completed viewport it leaves, so jumping back replays it.
+Edits invalidate those results so the next redraw uses the current
 syntax tree; when the parser rebuilds an injected tree without an edit, only the
 rows that tree covers are evaluated again. Parsed trees are indexed once per
 parser version, and change history is bounded; windows with older cached results

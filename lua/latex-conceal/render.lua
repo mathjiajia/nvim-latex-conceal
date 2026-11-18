@@ -179,6 +179,20 @@ local function intersection(a, b)
 	return first[1], first[2], last[4], last[5]
 end
 
+-- Included ranges are ordered and disjoint; find the first that ends after `byte`.
+local function first_included(ranges, byte)
+	local low, high = 1, #ranges + 1
+	while low < high do
+		local middle = math.floor((low + high) / 2)
+		if ranges[middle][6] <= byte then
+			low = middle + 1
+		else
+			high = middle
+		end
+	end
+	return low
+end
+
 -- A mark is { row, col, opts, tree, last row }; spread marks also carry the
 -- columns of the capture they belong to.
 local function add(rows, first, last, mark)
@@ -187,6 +201,11 @@ local function add(rows, first, last, mark)
 		if not marks then
 			marks = {}
 			rows[row] = marks
+		end
+		-- Only a mark spanning rows lies in several row lists, where replaying
+		-- and revalidating must not count it once per row.
+		if mark[1] ~= mark[5] then
+			marks.multiline = true
 		end
 		marks[#marks + 1] = mark
 	end
@@ -289,10 +308,14 @@ local function scan(buf, cached, first, last, rows)
 	local line_count = cached.line_count
 	local default_priority = vim.hl.priorities.treesitter
 	local overflow = false
+	local first_byte, last_byte
 	for _, entry in ipairs(cached.trees) do
 		if entry.first < last and entry.last >= first then
 			local included = entry.included
 			local contiguous = #included == 1
+			if #included > 1 and not first_byte then
+				first_byte, last_byte = api.nvim_buf_get_offset(buf, first), api.nvim_buf_get_offset(buf, last)
+			end
 			local tree = entry.tree
 			if placed then
 				context.first, context.last, context.depth = first, last, 0
@@ -315,16 +338,31 @@ local function scan(buf, cached, first, last, rows)
 					if narrowed and #narrowed == 6 then
 						-- A directive's byte range is what the general lookup would return.
 						range = narrowed
-					elseif contiguous and not (capture and (narrowed or capture.offset)) then
-						-- Unmodified nodes already lie inside a contiguous tree. Avoid
-						-- allocating byte ranges just to intersect them with that tree.
-						sr, sc, er, ec = node:range()
+					elseif not (capture and (narrowed or capture.offset)) then
+						if contiguous then
+							-- Unmodified nodes already lie inside a contiguous tree. Avoid
+							-- allocating byte ranges just to intersect them with that tree.
+							sr, sc, er, ec = node:range()
+						else
+							range = { node:range(true) }
+						end
 					else
 						range = ts.get_range(node, buf, capture)
 					end
-					for i = 1, range and #included or 1 do
+					-- Of many included ranges, only those inside both the capture and
+					-- the collected rows can hold a piece of it.
+					local start, stop = 1, nil
+					if #included > 1 then
+						start = first_included(included, math.max(first_byte, range[3]))
+						stop = math.min(last_byte, range[6])
+					end
+					for i = start, range and #included or 1 do
 						if range then
-							sr, sc, er, ec = intersection(range, included[i])
+							local span = included[i]
+							if stop and span[3] >= stop then
+								break
+							end
+							sr, sc, er, ec = intersection(range, span)
 						end
 						local final = sr and er - (ec == 0 and 1 or 0)
 						-- A capture reaching into these rows may be narrowed to a part outside them.
@@ -338,7 +376,7 @@ local function scan(buf, cached, first, last, rows)
 							if line then
 								overflow = spread(rows, first, last, line, sr, sc, ec, parts, hl_group, priority, tree) or overflow
 							else
-								local mark = {
+								add(rows, first, last, {
 									sr,
 									sc,
 									{
@@ -351,15 +389,7 @@ local function scan(buf, cached, first, last, rows)
 									},
 									tree,
 									final
-								}
-								for row = math.max(first, sr), math.min(last - 1, final) do
-									local marks = rows[row]
-									if not marks then
-										marks = {}
-										rows[row] = marks
-									end
-									marks[#marks + 1] = mark
-								end
+								})
 							end
 						end
 					end
@@ -374,6 +404,9 @@ end
 -- and the regions recorded so far. Nothing may stay shared if the query fails.
 local function collect(buf, cached, first, last)
 	local rows = {}
+	if #cached.trees == 0 then
+		return rows
+	end
 	for i, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
 		cached.lines[first + i - 1] = line
 	end
@@ -409,6 +442,11 @@ local function collect_viewport(buf, cached, previous)
 	local first, last = cached.first, cached.last
 	if not previous then
 		return collect(buf, cached, first, last)
+	end
+	-- A saved viewport is taken over whole.
+	if first == previous.first and last == previous.last then
+		cached.lines = previous.lines
+		return previous.rows
 	end
 	local low, high = math.max(first, previous.first), math.min(last, previous.last)
 	if crosses_boundary(previous.rows[low], low) or crosses_boundary(previous.rows[high - 1], high) then
@@ -447,9 +485,16 @@ local function apply_changes(cached, state)
 				cached.ready = ready
 			end
 			local rows = cached.rows
-			for row = low, high do
-				rows[row] = nil
-				ready[row] = nil
+			if cached.sparse and low < high then
+				for row in pairs(ready) do
+					if row >= low and row <= high then
+						rows[row], ready[row], cached.lines[row] = nil, nil, nil
+					end
+				end
+			else
+				for row = low, high do
+					rows[row], ready[row], cached.lines[row] = nil, nil, nil
+				end
 			end
 		end
 	end
@@ -461,34 +506,45 @@ end
 -- yields. Keep completed conceals too, but only where their source still
 -- matches: save-time formatting may have changed or moved some of the rows.
 local function pending_rows(buf, cached)
-	local unchanged, valid, rows = {}, {}, {}
+	if not next(cached.rows) then
+		return cached.rows
+	end
+	-- run_start[row] is the first row of the unchanged run that reaches `row`,
+	-- so a mark is intact when the run reaching its last row began by its first.
+	local run_start, rows = {}, {}
+	local function compare(first, last)
+		for index, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
+			local row = first + index - 1
+			if line == cached.lines[row] then
+				run_start[row] = run_start[row - 1] or row
+			end
+		end
+	end
 	if cached.sparse then
 		-- Folded viewports can span thousands of hidden rows. Read only the
 		-- source rows collected when Neovim actually painted them.
-		for row, line in pairs(cached.lines) do
-			unchanged[row] = api.nvim_buf_get_lines(buf, row, row + 1, false)[1] == line
+		for row in pairs(cached.lines) do
+			if not cached.lines[row - 1] then
+				local last = row + 1
+				while cached.lines[last] do
+					last = last + 1
+				end
+				compare(row, last)
+			end
 		end
 	else
-		for i, line in ipairs(api.nvim_buf_get_lines(buf, cached.first, cached.last, false)) do
-			local row = cached.first + i - 1
-			unchanged[row] = line == cached.lines[row]
-		end
+		compare(cached.first, cached.last)
 	end
 	for row, marks in pairs(cached.rows) do
-		for _, mark in ipairs(marks) do
-			if valid[mark] == nil then
-				local same = true
-				for line = mark[1], mark[5] do
-					if not unchanged[line] then
-						same = false
-						break
-					end
+		if run_start[row] and not marks.multiline then
+			rows[row] = marks
+		elseif run_start[row] then
+			for _, mark in ipairs(marks) do
+				local start = run_start[mark[5]]
+				if start and start <= mark[1] then
+					rows[row] = rows[row] or { multiline = true }
+					rows[row][#rows[row] + 1] = mark
 				end
-				valid[mark] = same
-			end
-			if valid[mark] then
-				rows[row] = rows[row] or {}
-				rows[row][#rows[row] + 1] = mark
 			end
 		end
 	end
@@ -588,6 +644,9 @@ local function follow_cursor()
 	end
 	if drawn and (overflow or drawn[2]) then
 		redraw_row(win, drawn[1])
+		if drawn[1] == row then
+			return
+		end
 	end
 	if overflow or first then
 		redraw_row(win, row)
@@ -667,9 +726,6 @@ local function on_win(_, win, buf, top, bottom)
 		return false
 	end
 	local state = parser_state(parser)
-	if state.index_version ~= state.version then
-		build_index(state, active)
-	end
 	local line_count = api.nvim_buf_line_count(buf)
 	local last = math.min(line_count, bottom + 1)
 	local sparse = last - top > api.nvim_win_get_height(win) + 1
@@ -682,6 +738,10 @@ local function on_win(_, win, buf, top, bottom)
 	if reusable and cached.first <= top and cached.last >= last
 		and (not cached.sparse or cached.view_first == top and cached.view_last == last) then
 		if cached.version ~= state.version then
+			cached.back = nil
+			if state.index_version ~= state.version then
+				build_index(state, active)
+			end
 			apply_changes(cached, state)
 			if #state.changes > change_limit / 2 then
 				trim_changes(state, tick)
@@ -706,28 +766,49 @@ local function on_win(_, win, buf, top, bottom)
 	last = math.min(line_count, last + padding)
 	-- Reparse only the requested region, including injections, rather than the entire document.
 	-- Keep the other splits' regions valid too: a parse replaces the injection-validity range.
-	local ranges = { { first, last } }
-	local tab = api.nvim_win_get_tabpage(win)
-	for other, cache in pairs(windows) do
-		if other ~= win and cache.parser == parser and api.nvim_win_is_valid(other) and api.nvim_win_get_buf(other) == buf
-			and api.nvim_win_get_tabpage(other) == tab then
-			ranges[#ranges + 1] = { cache.first, cache.last }
+	local range = { first, last }
+	if not parser:is_valid(false, range) then
+		local ranges = { range }
+		local tab = api.nvim_win_get_tabpage(win)
+		for other, cache in pairs(windows) do
+			if other ~= win and cache.parser == parser and api.nvim_win_is_valid(other) and api.nvim_win_get_buf(other) == buf
+				and api.nvim_win_get_tabpage(other) == tab then
+				ranges[#ranges + 1] = { cache.first, cache.last }
+			end
 		end
+		table.sort(ranges, function (a, b)
+			return a[1] < b[1]
+		end)
+		parser:parse(ranges)
 	end
-	table.sort(ranges, function (a, b)
-		return a[1] < b[1]
-	end)
-	parser:parse(ranges)
 	if state.index_version ~= state.version then
 		build_index(state, active)
 	end
-	local previous
-	if reusable and nearby and not sparse and not cached.sparse and cached.version >= state.reset then
-		if cached.version ~= state.version then
-			apply_changes(cached, state)
+	-- Besides the viewport it scrolls within, a window keeps the completed one it
+	-- last jumped away from, so that jumping back replays it. Either is good for
+	-- one buffer tick and one parser version only.
+	local previous, back
+	if reusable and not sparse and not cached.sparse and cached.version >= state.reset then
+		back = cached.back
+		if back and back.version ~= state.version then
+			back = nil
 		end
-		if not cached.ready then
-			previous = cached
+		if nearby then
+			if cached.version ~= state.version then
+				apply_changes(cached, state)
+			end
+			if not cached.ready then
+				previous = cached
+			end
+		else
+			if back and back.first <= first and back.last >= last then
+				previous, first, last = back, back.first, back.last
+			end
+			if not cached.ready and cached.version == state.version then
+				back = { first = cached.first, last = cached.last, rows = cached.rows, lines = cached.lines, version = cached.version }
+			else
+				back = nil
+			end
 		end
 	end
 	local next_cache = {
@@ -742,6 +823,7 @@ local function on_win(_, win, buf, top, bottom)
 		last = last,
 		line_count = line_count,
 		lines = {},
+		back = back,
 		trees = latex_trees(state.index, first, last),
 		priorities = tree_priorities(state.index, top, bottom),
 		priorities_version = state.version,
@@ -803,12 +885,14 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 	for row = first, last - 1 do
 		local marks = rows[row]
 		if marks then
-			local cursor = row == cursor_row
+			local cursor, multiline = row == cursor_row, marks.multiline
 			for i = 1, #marks do
 				local mark = marks[i]
 				local priority = priorities[mark[4]]
-				if priority and mark.serial ~= serial then
-					mark.serial = serial
+				if priority and (not multiline or mark.serial ~= serial) then
+					if multiline then
+						mark.serial = serial
+					end
 					local opts = mark[3]
 					if mark.inline then
 						opts = overflow and not cursor and opts

@@ -1,4 +1,4 @@
-local symbols = require("latex-conceal.symbols")
+local symbols
 local lookup_font
 local exact
 
@@ -13,6 +13,7 @@ function M.lookup(text, kind)
 		return lookup_font(text)
 	end
 	if kind == "math" or kind == "text" then
+		symbols = symbols or require("latex-conceal.symbols")
 		return symbols[kind][text]
 	end
 	exact = exact or require("latex-conceal.exact")
