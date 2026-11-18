@@ -440,6 +440,18 @@ end
 -- strips. The new viewport replaces the old one so the cache stays bounded.
 local function collect_viewport(buf, cached, previous)
 	local first, last = cached.first, cached.last
+	if cached.ready then
+		local rows = {}
+		if previous then
+			for row = math.max(first, previous.first), math.min(last, previous.last) - 1 do
+				local marks = previous.rows[row]
+				if previous.ready[row] and not (marks and marks.multiline) then
+					cached.ready[row], rows[row], cached.lines[row] = true, marks, previous.lines[row]
+				end
+			end
+		end
+		return rows
+	end
 	if not previous then
 		return collect(buf, cached, first, last)
 	end
@@ -797,15 +809,16 @@ local function on_win(_, win, buf, top, bottom)
 			if cached.version ~= state.version then
 				apply_changes(cached, state)
 			end
-			if not cached.ready then
-				previous = cached
-			end
+			previous = cached
 		else
 			if back and back.first <= first and back.last >= last then
 				previous, first, last = back, back.first, back.last
 			end
-			if not cached.ready and cached.version == state.version then
-				back = { first = cached.first, last = cached.last, rows = cached.rows, lines = cached.lines, version = cached.version }
+			if cached.version == state.version then
+				back = {
+					first = cached.first, last = cached.last, rows = cached.rows, lines = cached.lines,
+					ready = cached.ready, version = cached.version
+				}
 			else
 				back = nil
 			end
@@ -829,13 +842,13 @@ local function on_win(_, win, buf, top, bottom)
 		priorities_version = state.version,
 		top = top,
 		bottom = bottom,
-		ready = deferred and {} or nil,
+		ready = (deferred or previous and previous.ready) and {} or nil,
 		sparse = sparse,
 		view_first = top,
 		view_last = view_last,
 		drawn = cached and cached.buf == buf and cached.drawn or nil
 	}
-	next_cache.rows = deferred and {} or collect_viewport(buf, next_cache, previous)
+	next_cache.rows = collect_viewport(buf, next_cache, previous)
 	track_cursor(win, buf, next_cache, level)
 	windows[win] = next_cache
 	if #state.changes > change_limit / 2 then
