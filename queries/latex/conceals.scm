@@ -1,16 +1,9 @@
 ; extends
 
 ; Every pattern below is evaluated for each node it structurally matches, and
-; each candidate match costs a Lua round trip, so the patterns are shaped to
-; reject nodes in the C query cursor before any predicate or directive runs.
-; Compiling a pattern is costly too when a child must be found among arbitrary
-; siblings, so braces and delimiters are not matched as children: their node is
-; captured twice and #latex-ends! narrows the captures to its two end tokens.
+; each candidate match costs a Lua round trip. Compiling a pattern is costly
+; too when a child must be found among arbitrary siblings.
 
-; Mathematics, text commands and labels. The renderer records these regions as
-; the query yields them, in document order, which lets #latex-math? and the
-; symbol directives place a node without walking its ancestors. A formula's
-; delimiters are hidden by the same match.
 ([
   (inline_formula)
   (displayed_equation)
@@ -25,17 +18,11 @@
 
 (label_definition) @_label
 
-; Symbol commands share one lookup; the directive selects math or text context
-; and excludes labels.
 (generic_command
   command: (command_name) @conceal
   (#set! latex.conceal-only)
   (#latex-symbol! @conceal))
 
-; One match per group decides for both braces whether they hide: in
-; mathematics, around \text content, and around a formatting command's first
-; argument. The captures are narrowed to the braces, so the group itself stays
-; visible.
 ((curly_group) @conceal @conceal.close
   (#latex-braces? @conceal)
   (#latex-ends! @conceal @conceal.close)
@@ -56,17 +43,12 @@
 ("\\item" @punctuation.special
   (#set! conceal "○"))
 
-; A command with a braced argument becomes one grapheme when the whole text is
-; supported: exact accents and legacy fonts keep the default priority, while
-; bars, overlines and Unicode font alphabets (math context only) take priority
-; one above the Tree-sitter default so they win over conceals of their contents.
 ((generic_command
   command: (command_name)
   arg: (curly_group)) @conceal
   (#set! latex.conceal-only)
   (#latex-argument! @conceal))
 
-; Unbraced scripts: the node text such as `_1` or `^n` selects the replacement.
 ; The grammar's script argument is a curly_group, a letter, or a command_name.
 (text
   word: [
@@ -85,9 +67,7 @@
   (#latex-math? @conceal)
   (#latex-script! @conceal))
 
-; Braced scripts: a single word or operator inside a group follows the nearest
-; enclosing script through grouping braces. The parser leaves `=`, `(` and `)`
-; as anonymous tokens of the group, which count directly inside a script only.
+; The parser leaves `=`, `(` and `)` as anonymous tokens of the group.
 (curly_group
   [
     (text
@@ -103,7 +83,6 @@
   (#latex-math? @conceal)
   (#latex-script! @conceal))
 
-; Hide the script marker only when the whole braced value is supported.
 ([
   (subscript
     "_" @conceal
@@ -116,8 +95,6 @@
   (#latex-math? @conceal)
   (#set! @conceal conceal ""))
 
-; Fractions display as (numerator⧸ denominator). Each argument is captured
-; twice and narrowed to its opening and closing brace.
 ((generic_command
   .
   command: (command_name) @conceal.command
@@ -153,8 +130,6 @@
     "\\Uparrow" "⇑" "\\Downarrow" "⇓" "\\Updownarrow" "⇕")
   (#latex-conceal! @conceal "math"))
 
-; Physics wrappers, modular arithmetic such as \pmod{n} → (mod n), and
-; \operatorname share the same structure, context, and priority.
 ((generic_command
   .
   command: (command_name) @conceal.command

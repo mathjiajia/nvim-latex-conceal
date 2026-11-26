@@ -5,7 +5,7 @@ local context = require("latex-conceal.context")
 local highlighter = ts.highlighter
 local namespace = api.nvim_create_namespace("latex-conceal")
 -- Neovim draws ephemeral inline virtual text only in buffers that also hold a
--- stored inline mark, so a buffer with overflowing replacements gets one.
+-- stored inline mark.
 local anchor_namespace = api.nvim_create_namespace("latex-conceal-inline")
 local M = {}
 local margin = 20
@@ -23,11 +23,8 @@ local concealcursor_opts = { win = 0 }
 local math_kinds = { inline_formula = true, displayed_equation = true, math_environment = true }
 local mode_letters = { n = "n", v = "v", V = "v", ["\22"] = "v", i = "i", R = "i", c = "c" }
 
--- Each parser keeps a version counter and the row ranges that changed since
--- any window last looked. Neovim reports every replaced or dropped tree
--- through on_changedtree before it goes, so rows outside those ranges keep
--- their completed results across injection parses, which happen constantly
--- while scrolling Markdown.
+-- Neovim reports every replaced or dropped tree through on_changedtree before
+-- it goes.
 local function parser_state(parser)
 	local state = parsers[parser]
 	if not state then
@@ -36,9 +33,6 @@ local function parser_state(parser)
 			local version = state.version + 1
 			state.version = version
 			local changes = state.changes
-			-- A hidden window can retain an old generation indefinitely, even when
-			-- reparsing does not change the buffer tick. Bound the history and make
-			-- older windows rebuild instead of retaining every intervening change.
 			if #changes + 1 + #(ranges or {}) > change_limit then
 				state.reset = version
 				state.changes = {}
@@ -69,7 +63,6 @@ local function parser_state(parser)
 	return state
 end
 
--- Windows with an obsolete buffer tick or generation must rebuild anyway.
 local function trim_changes(state, tick)
 	local low = state.version
 	for _, cached in pairs(windows) do
@@ -99,9 +92,8 @@ local function has_latex(parser)
 	return false
 end
 
--- One pass over the language trees, reused until the parser changes them.
 -- Native highlighting numbers the visible trees in this order to break ties
--- between equal priorities, and conceals must follow the same numbering.
+-- between equal priorities.
 local function build_index(state, active)
 	local index, n, has_query = {}, 0, {}
 	active.tree:for_each_tree(function (tree, language_tree)
@@ -151,9 +143,6 @@ local function latex_trees(index, first, last)
 	return trees
 end
 
--- Per query: each capture's highlight, and which captures describe the
--- regions around other nodes instead of decorating text. A custom query
--- without all three kinds leaves that placement to Tree-sitter.
 local function capture_info(query)
 	local info = queries[query]
 	if not info then
@@ -169,7 +158,8 @@ local function capture_info(query)
 	return info
 end
 
--- Both ranges contain byte offsets, including when a directive changes the range.
+---@param a Range6
+---@param b Range6
 local function intersection(a, b)
 	if a[3] >= b[6] or b[3] >= a[6] then
 		return
@@ -179,7 +169,7 @@ local function intersection(a, b)
 	return first[1], first[2], last[4], last[5]
 end
 
--- Included ranges are ordered and disjoint; find the first that ends after `byte`.
+-- Included ranges are ordered and disjoint.
 local function first_included(ranges, byte)
 	local low, high = 1, #ranges + 1
 	while low < high do
@@ -193,8 +183,17 @@ local function first_included(ranges, byte)
 	return low
 end
 
--- A mark is { row, col, opts, tree, last row }; spread marks also carry the
--- columns of the capture they belong to.
+---@class latex_conceal.Mark
+---@field [1] integer first row
+---@field [2] integer column
+---@field [3] vim.api.keyset.set_extmark
+---@field [4] TSTree
+---@field [5] integer last row
+---@field span? integer[] the columns of the capture a spread mark belongs to
+---@field inline? true
+---@field shown? vim.api.keyset.set_extmark|false
+
+---@param mark latex_conceal.Mark
 local function add(rows, first, last, mark)
 	for row = math.max(first, mark[1]), math.min(last - 1, mark[5]) do
 		local marks = rows[row]
@@ -202,8 +201,6 @@ local function add(rows, first, last, mark)
 			marks = {}
 			rows[row] = marks
 		end
-		-- Only a mark spanning rows lies in several row lists, where replaying
-		-- and revalidating must not count it once per row.
 		if mark[1] ~= mark[5] then
 			marks.multiline = true
 		end
@@ -237,41 +234,35 @@ local function anchor(buf)
 	end)
 end
 
--- Neovim conceals a range with at most one character, so a longer replacement
--- is spread over the source characters. Characters shared at either end stay
--- visible, each remaining source character shows one replacement character,
--- surplus source is hidden and surplus replacement follows as inline text.
--- Returns true when the replacement overflows its source.
+-- Neovim conceals a range with at most one character.
+---@return boolean overflowed
 local function spread(rows, first, last, line, row, sc, ec, parts, hl_group, priority, tree)
-	-- Source characters as byte columns of the line, with the end as a sentinel.
-	local columns = vim.str_utf_pos(line:sub(sc + 1, ec))
-	local n, m = #columns, #parts
+	local boundaries = vim.str_utf_pos(line:sub(sc + 1, ec))
+	local n, m = #boundaries, #parts
 	for i = 1, n do
-		columns[i] = sc + columns[i] - 1
+		boundaries[i] = sc + boundaries[i] - 1
 	end
-	columns[n + 1] = ec
+	boundaries[n + 1] = ec
 	local head, tail = 0, 0
-	while head < n and head < m and line:sub(columns[head + 1] + 1, columns[head + 2]) == parts[head + 1] do
+	while head < n and head < m and line:sub(boundaries[head + 1] + 1, boundaries[head + 2]) == parts[head + 1] do
 		head = head + 1
 	end
-	while tail < n - head and tail < m - head and line:sub(columns[n - tail] + 1, columns[n - tail + 1]) == parts[m - tail] do
+	while tail < n - head and tail < m - head and line:sub(boundaries[n - tail] + 1, boundaries[n - tail + 1]) == parts[m - tail] do
 		tail = tail + 1
 	end
 	local span = { sc, ec }
 	local paired = math.min(n, m) - tail
-	-- Source characters [i, j) show one replacement character each; those the
-	-- replacement has no character for are hidden together.
 	local i = head + 1
 	while i <= n - tail do
 		local j, conceal = i + 1, parts[i]
 		if i > paired then
 			j, conceal = n - tail + 1, ""
 		end
-		if line:sub(columns[i] + 1, columns[j]) ~= conceal then
+		if line:sub(boundaries[i] + 1, boundaries[j]) ~= conceal then
 			add(rows, first, last, {
 				row,
-				columns[i],
-				{ end_row = row, end_col = columns[j], conceal = conceal, hl_group = hl_group, priority = priority, ephemeral = true },
+				boundaries[i],
+				{ end_row = row, end_col = boundaries[j], conceal = conceal, hl_group = hl_group, priority = priority, ephemeral = true },
 				tree,
 				row,
 				span = span
@@ -282,7 +273,7 @@ local function spread(rows, first, last, line, row, sc, ec, parts, hl_group, pri
 	if paired >= n - tail and paired < m - tail then
 		add(rows, first, last, {
 			row,
-			columns[n - tail + 1],
+			boundaries[n - tail + 1],
 			{
 				virt_text = { { table.concat(parts, "", paired + 1, m - tail), hl_group ~= 0 and hl_group or "Conceal" } },
 				virt_text_pos = "inline",
@@ -299,8 +290,7 @@ local function spread(rows, first, last, line, row, sc, ec, parts, hl_group, pri
 	return false
 end
 
--- Evaluate the query over rows [first, last) of every tree into `rows`.
--- Returns true when a replacement overflows its source.
+---@return boolean overflowed
 local function scan(buf, cached, first, last, rows)
 	local query = cached.query
 	local info = capture_info(query)
@@ -340,8 +330,7 @@ local function scan(buf, cached, first, last, rows)
 						range = narrowed
 					elseif not (capture and (narrowed or capture.offset)) then
 						if contiguous then
-							-- Unmodified nodes already lie inside a contiguous tree. Avoid
-							-- allocating byte ranges just to intersect them with that tree.
+							-- Unmodified nodes already lie inside a contiguous tree.
 							sr, sc, er, ec = node:range()
 						else
 							range = { node:range(true) }
@@ -349,8 +338,6 @@ local function scan(buf, cached, first, last, rows)
 					else
 						range = ts.get_range(node, buf, capture)
 					end
-					-- Of many included ranges, only those inside both the capture and
-					-- the collected rows can hold a piece of it.
 					local start, stop = 1, nil
 					if #included > 1 then
 						start = first_included(included, math.max(first_byte, range[3]))
@@ -365,7 +352,6 @@ local function scan(buf, cached, first, last, rows)
 							sr, sc, er, ec = intersection(range, span)
 						end
 						local final = sr and er - (ec == 0 and 1 or 0)
-						-- A capture reaching into these rows may be narrowed to a part outside them.
 						if sr and (er > sr or ec > sc) and er + (ec > 0 and 1 or 0) <= line_count
 							and sr < last and final >= first then
 							local parts = sr == er and type(conceal) == "string" and graphemes[conceal]
@@ -400,8 +386,6 @@ local function scan(buf, cached, first, last, rows)
 	return overflow
 end
 
--- While the query runs, its predicates and directives read the collected lines
--- and the regions recorded so far. Nothing may stay shared if the query fails.
 local function collect(buf, cached, first, last)
 	local rows = {}
 	if #cached.trees == 0 then
@@ -422,8 +406,6 @@ local function collect(buf, cached, first, last)
 	return rows
 end
 
--- Keep whole captures together when a cache boundary cuts through a multiline
--- mark. Recollecting that viewport avoids replaying the same capture twice.
 local function crosses_boundary(marks, boundary)
 	if not marks then
 		return false
@@ -436,8 +418,6 @@ local function crosses_boundary(marks, boundary)
 	return false
 end
 
--- A small scroll keeps the completed overlap and queries only the missing
--- strips. The new viewport replaces the old one so the cache stays bounded.
 local function collect_viewport(buf, cached, previous)
 	local first, last = cached.first, cached.last
 	if cached.ready then
@@ -455,7 +435,6 @@ local function collect_viewport(buf, cached, previous)
 	if not previous then
 		return collect(buf, cached, first, last)
 	end
-	-- A saved viewport is taken over whole.
 	if first == previous.first and last == previous.last then
 		cached.lines = previous.lines
 		return previous.rows
@@ -477,7 +456,6 @@ local function collect_viewport(buf, cached, previous)
 	return rows
 end
 
--- Forget the rows that changed trees cover; other rows stay complete.
 local function apply_changes(cached, state)
 	local first, last = cached.first, cached.last
 	local changes = state.changes
@@ -515,14 +493,11 @@ local function apply_changes(cached, state)
 end
 
 -- Native highlighting keeps its previous trees while an asynchronous parse
--- yields. Keep completed conceals too, but only where their source still
--- matches: save-time formatting may have changed or moved some of the rows.
+-- yields.
 local function pending_rows(buf, cached)
 	if not next(cached.rows) then
 		return cached.rows
 	end
-	-- run_start[row] is the first row of the unchanged run that reaches `row`,
-	-- so a mark is intact when the run reaching its last row began by its first.
 	local run_start, rows = {}, {}
 	local function compare(first, last)
 		for index, line in ipairs(api.nvim_buf_get_lines(buf, first, last, false)) do
@@ -533,8 +508,6 @@ local function pending_rows(buf, cached)
 		end
 	end
 	if cached.sparse then
-		-- Folded viewports can span thousands of hidden rows. Read only the
-		-- source rows collected when Neovim actually painted them.
 		for row in pairs(cached.lines) do
 			if not cached.lines[row - 1] then
 				local last = row + 1
@@ -571,8 +544,8 @@ local function cursor_line_concealed(win)
 	return letter ~= nil and api.nvim_get_option_value("concealcursor", concealcursor_opts):find(letter, 1, true) ~= nil
 end
 
--- The columns of the cursor row that formula reveal shows as source: the
--- innermost formula around the cursor or, outside math, the conceal under it.
+---@return integer? first
+---@return integer? last
 local function cursor_unit(cached, rows, row, col)
 	for _, entry in ipairs(cached.trees) do
 		if entry.first <= row and entry.last >= row then
@@ -632,8 +605,7 @@ local function redraw_row(win, row)
 	api.nvim__redraw({ win = win, range = { row, row + 1 } })
 end
 
--- Neovim repaints no rows for cursor motion within a concealed cursor line, so
--- repaint those whose revealed formula or suppressed overflow changes.
+-- Neovim repaints no rows for cursor motion within a concealed cursor line.
 local function follow_cursor()
 	local win = api.nvim_get_current_win()
 	local cached = windows[win]
@@ -674,7 +646,6 @@ local function leave_window()
 	end
 end
 
--- Cursor motion costs nothing until a window reveals formulas or draws overflow.
 local function follow()
 	following = true
 	local group = api.nvim_create_augroup("latex-conceal-cursor", {})
@@ -682,13 +653,11 @@ local function follow()
 	api.nvim_create_autocmd("WinLeave", { group = group, callback = leave_window })
 end
 
--- Neovim places the cursor without counting ephemeral inline text, and formula
--- reveal follows the cursor, so both need the current window's cursor row.
+-- Neovim places the cursor without counting ephemeral inline text.
 local function track_cursor(win, buf, cached, level)
 	cached.level = level
 	local formula = vim.g.latex_conceal_reveal == "formula"
 	local tracked = formula or anchored[buf]
-	-- A window drawn while another is current still needs repainting on entry.
 	if tracked and not following then
 		follow()
 	end
@@ -707,7 +676,6 @@ local function on_win(_, win, buf, top, bottom)
 		windows[win] = nil
 		return false
 	end
-	-- Nothing is concealed at level 0, so skip the query and the replay entirely.
 	conceallevel_opts.win = win
 	local level = api.nvim_get_option_value("conceallevel", conceallevel_opts)
 	if level == 0 then
@@ -731,7 +699,6 @@ local function on_win(_, win, buf, top, bottom)
 		cached.pending, cached.pending_tick = nil, nil
 	end
 	local parser = active.tree
-	-- Other highlighted buffers need neither parser callbacks nor a tree index.
 	local query = has_latex(parser) and ts.query.get("latex", "conceals")
 	if not query then
 		windows[win] = nil
@@ -742,15 +709,13 @@ local function on_win(_, win, buf, top, bottom)
 	local last = math.min(line_count, bottom + 1)
 	local sparse = last - top > api.nvim_win_get_height(win) + 1
 	local tick = api.nvim_buf_get_changedtick(buf)
-	-- Replaced trees arrive through the parser callbacks, so only an invalidated
-	-- root (a buffer reload) can leave results stale without changing the version.
 	local reusable = cached and cached.buf == buf and cached.parser == parser and cached.tick == tick and cached.query == query
 		and cached.default_priority == vim.hl.priorities.treesitter
 		and cached.version >= state.reset and parser:is_valid(true)
 	if reusable and cached.first <= top and cached.last >= last
 		and (not cached.sparse or cached.view_first == top and cached.view_last == last) then
 		if cached.version ~= state.version then
-			cached.back = nil
+			cached.jumped_from = nil
 			if state.index_version ~= state.version then
 				build_index(state, active)
 			end
@@ -767,17 +732,14 @@ local function on_win(_, win, buf, top, bottom)
 		return true
 	end
 
-	-- Edits discard every result, then refill only ranges Neovim actually repaints.
 	local edited = cached and cached.buf == buf and cached.tick ~= tick
 	local nearby = not cached or top < cached.last and last > cached.first
-	-- A folded window can span thousands of hidden lines; query only its repainted rows.
 	local deferred = edited or sparse
 	local padding = not deferred and nearby and margin or 0
 	local first = math.max(0, top - padding)
 	local view_last = last
 	last = math.min(line_count, last + padding)
-	-- Reparse only the requested region, including injections, rather than the entire document.
-	-- Keep the other splits' regions valid too: a parse replaces the injection-validity range.
+	-- A parse replaces the injection-validity range.
 	local range = { first, last }
 	if not parser:is_valid(false, range) then
 		local ranges = { range }
@@ -796,14 +758,11 @@ local function on_win(_, win, buf, top, bottom)
 	if state.index_version ~= state.version then
 		build_index(state, active)
 	end
-	-- Besides the viewport it scrolls within, a window keeps the completed one it
-	-- last jumped away from, so that jumping back replays it. Either is good for
-	-- one buffer tick and one parser version only.
-	local previous, back
+	local previous, jumped_from
 	if reusable and not sparse and not cached.sparse and cached.version >= state.reset then
-		back = cached.back
-		if back and back.version ~= state.version then
-			back = nil
+		jumped_from = cached.jumped_from
+		if jumped_from and jumped_from.version ~= state.version then
+			jumped_from = nil
 		end
 		if nearby then
 			if cached.version ~= state.version then
@@ -811,16 +770,16 @@ local function on_win(_, win, buf, top, bottom)
 			end
 			previous = cached
 		else
-			if back and back.first <= first and back.last >= last then
-				previous, first, last = back, back.first, back.last
+			if jumped_from and jumped_from.first <= first and jumped_from.last >= last then
+				previous, first, last = jumped_from, jumped_from.first, jumped_from.last
 			end
 			if cached.version == state.version then
-				back = {
+				jumped_from = {
 					first = cached.first, last = cached.last, rows = cached.rows, lines = cached.lines,
 					ready = cached.ready, version = cached.version
 				}
 			else
-				back = nil
+				jumped_from = nil
 			end
 		end
 	end
@@ -836,7 +795,7 @@ local function on_win(_, win, buf, top, bottom)
 		last = last,
 		line_count = line_count,
 		lines = {},
-		back = back,
+		jumped_from = jumped_from,
 		trees = latex_trees(state.index, first, last),
 		priorities = tree_priorities(state.index, top, bottom),
 		priorities_version = state.version,
@@ -920,8 +879,6 @@ local function on_range(_, win, buf, first_row, _, last_row, last_col)
 			end
 		end
 	end
-	-- All columns of each collected row have already been emitted. Skip the
-	-- remainder of wrapped rows and any completed empty rows in this redraw.
 	local next_row = last
 	while next_row < cached.last and not rows[next_row] and (not ready or ready[next_row]) do
 		next_row = next_row + 1
@@ -935,7 +892,6 @@ function M.setup()
 	end
 	initialized = true
 	api.nvim_set_decoration_provider(namespace, { on_win = on_win, on_range = on_range })
-	-- A closing brace or delimiter has its own capture; color it like the opening one.
 	local function link_closing()
 		api.nvim_set_hl(0, "@conceal.close.latex", { default = true, link = "@conceal.latex" })
 	end

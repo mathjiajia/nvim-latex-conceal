@@ -1,8 +1,3 @@
--- Subscript and superscript replacements.
---
--- `braced` maps a single word, operator or token inside a braced script to
--- its replacement, keyed by the kind of script that encloses it. `inline`
--- maps the text of an unbraced script node such as `_1` or `^n`.
 local subscript = {
 	["0"] = "₀",
 	["1"] = "₁",
@@ -129,12 +124,12 @@ local superscript = {
 	["."] = "˙"
 }
 
-local inline = { ["_\\."] = "‸" }
+local unbraced = { ["_\\."] = "‸" }
 for text, replacement in pairs(subscript) do
-	inline["_" .. text] = replacement
+	unbraced["_" .. text] = replacement
 end
 for text, replacement in pairs(superscript) do
-	inline["^" .. text] = replacement
+	unbraced["^" .. text] = replacement
 end
 
-return { braced = { subscript = subscript, superscript = superscript }, inline = inline }
+return { braced = { subscript = subscript, superscript = superscript }, unbraced = unbraced }

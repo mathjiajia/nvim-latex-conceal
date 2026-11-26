@@ -1,7 +1,6 @@
 -- Supplementary symbols adapted from pxwg/math-conceal.nvim,
 -- revision 0c8dc9a63fe8f786333402e12c0b4ed3ae2ae5e1.
 -- Additional coverage checked against c456e87c608fa019f8a6e58c35e88161f450ba85.
--- Keep supplementary math symbols separate: sized delimiters use this table too.
 local variation_selector_one = "\u{FE00}"
 local long_solidus_overlay = "\u{0338}"
 
@@ -1003,6 +1002,7 @@ return {
 		["\\llangle"] = "⦉",
 		["\\llarc"] = "◟",
 		["\\llblacktriangle"] = "◣",
+		["\\llbracket"] = "⟦",
 		["\\llcorner"] = "⌞",
 		["\\lll"] = "⋘",
 		["\\lllnest"] = "⫷",
@@ -2303,6 +2303,7 @@ return {
 		["\\rparenuend"] = "⎞",
 		["\\rppolint"] = "⨒",
 		["\\rrangle"] = "⦊",
+		["\\rrbracket"] = "⟧",
 		["\\rrparenthesis"] = "⦈",
 		["\\rsolbar"] = "⧷",
 		["\\rsqhook"] = "⫎",
@@ -2731,8 +2732,6 @@ return {
 		["\\{"] = "{",
 		["\\}"] = "}"
 	},
-	-- Longer replacements are spread over the command's own characters, so an
-	-- operator name loses only its backslash.
 	words = {
 		math = {
 			["\\arccos"] = "arccos",

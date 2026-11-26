@@ -1,5 +1,3 @@
--- Single-symbol additions to the mappings in exact.lua.
--- A conceal can contain one base character and combining marks, not a word.
 local M = {}
 
 local function alphabet(upper, lower, digits, exceptions)
@@ -56,8 +54,6 @@ local styles = {
 	mono = alphabet(0x1D670, 0x1D68A, 0x1D7F6)
 }
 
--- These names specify Unicode alphabets; unavailable styles (e.g. italic
--- digits or double-struck Greek) deliberately have no substitute.
 local font_styles = {
 	mathrm = "upright",
 	mathup = "upright",
@@ -95,7 +91,6 @@ local font_styles = {
 	symbfsfup = "boldsans",
 	mathbfsfit = "bolditalicsans",
 	symbfsfit = "bolditalicsans",
-	-- Keep the existing bold-script appearance of mathcal and mathscr.
 	mathcal = "boldscript",
 	mathscr = "boldscript",
 	mathbfcal = "boldscript",
@@ -236,7 +231,7 @@ local greek_styles = {
 	bolditalicsans = 0x1D790
 }
 
--- Legacy math alphabet commands do not change Greek commands. The Unicode
+-- Legacy math alphabet commands do not change lowercase Greek. The Unicode
 -- math styles and bm/boldsymbol do; bm preserves upright capitals/nabla.
 local greek_fonts = {
 	symup = "upright",
@@ -331,8 +326,6 @@ local additional_bars = {
 	["\\Digamma"] = true
 }
 
--- No supported command is longer than `\command{body}` built from the longest
--- command and body names, so callers can skip longer arguments unread.
 do
 	local command_length, body_length = 0, 1
 	for _, names in ipairs({ font_styles, greek_fonts, accents }) do
@@ -350,7 +343,7 @@ do
 			body_length = math.max(body_length, #body)
 		end
 	end
-	M.max_length = 1 + command_length + 1 + body_length + 1
+	M.max_argument_bytes = #"\\" + command_length + #"{" + body_length + #"}"
 end
 
 ---@param full_command string
@@ -384,16 +377,15 @@ local function lookup(full_command)
 	end
 end
 
--- Documents repeat the same few commands, so results are memoized. Misses are
--- stored as false; the cache is reset should it ever grow large.
 local cache, cached = {}, 0
+local cache_limit = 4096
 
 ---@param full_command string
 ---@return string?
 function M.lookup(full_command)
 	local replacement = cache[full_command]
 	if replacement == nil then
-		if cached >= 4096 then
+		if cached >= cache_limit then
 			cache, cached = {}, 0
 		end
 		replacement = lookup(full_command) or false
